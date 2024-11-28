@@ -1,0 +1,1639 @@
+﻿<html>
+	<head>
+		<meta name="viewport" content="initial-scale=1.0, user-scalable=no">
+		<title>Map</title>
+		<script type="text/javascript">
+			window._AMapSecurityConfig =
+			{
+				securityJsCode:'128bd45e3f7532dffbf4134c153dbbd9',
+			}
+		</script>
+		<script type="text/javascript" src="https://webapi.amap.com/maps?v=1.4.15&key=cf6edf5f08c0c90141db2148d8b0280c&plugin=AMap.Geocoder,AMap.Walking,AMap.Riding,AMap.Driving,AMap.Transfer,AMap.PlaceSearch,AMap.StationSearch,AMap.LineSearch,AMap.Geolocation,AMap.DistrictSearch,AMap.GraspRoad"></script>
+		<script src="https://cdn.staticfile.org/downloadjs/1.4.8/download.min.js"></script>
+	</head>
+		<body>
+		<div id=container style="height:65%;width:100%;float:left;"></div>
+		<div id=right style="height:25%;width:100%;float:left;">
+			<br>
+			<p>
+				<select id=type>
+					<option value=0 selected=true>步行</option>
+					<option value=1>单车</option>
+					<option value=2>公交</option>
+					<option value=3>列车</option>
+					<option value=4>飞机</option>
+					<option value=5>公路</option>
+					<option value=6>高速</option>
+				</select>
+				<input type=text id=RouteNumber style="width:50px;"/>
+				<input type=button value=新段 onclick="CreateSubpath(document.getElementById('type').value)"/>
+				<input type=button value=删点 onclick="DeleteOne()" />
+				<input type=button value=清空 onclick="CleanMap()" />
+				<input type=button value=标记 onclick="ClickMarker()" />
+				<input type=button value=选择 onclick="PolyClickPoint(marker.getPosition())" />
+				<input type=button value=回家 onclick="BackHome()" />
+				<input type=button value=保存 onclick="AutoNameAndSave()" />
+				<input type=button value=读取 onclick="SelectAndOpenDAT()" />
+			</p>
+			<p>
+				<input type=button value=统计 onclick="CalcLength()" style="font-size:50%"/>
+				<input type=button value=命名 onclick="Name2()" style="font-size:50%"/>
+				<input type=button value=图片 onclick="AutoNamePic()" style="font-size:50%"/>
+				<input type=button value=输出 onclick="FitAll(); SaveDat()" style="font-size:50%"/>
+				<input type=button value=输入 onclick="LoadDat()" style="font-size:50%"/>
+				<input type=button value="日期+" style="font-size:50%" onclick="AddDate(1)" />
+				<input type=button value="日期-" style="font-size:50%" onclick="AddDate(-1)" />
+				<input type=button value=修改 onclick="SetParam()" style="font-size:50%" />
+				<input type=button value=导航 onclick="GetRoad()"  style="font-size:50%" />
+				<input type=button value=直连 onclick="ClickMarker(false)"  style="font-size:50%" />
+				<input type=button value="探索" style="font-size:50%" onclick="DrawBus()" />
+				<input type=button value="卫星" style="font-size:50%" onclick="ButtonSatel()" />
+				<br>
+				<input type=text id=SearchBox style="width:80px;font-size:50%"/>
+				<input type=button value=搜索 style="font-size:50%" onclick="Search(document.getElementById('SearchBox').value)" />
+				<input type=button value=观看 style="font-size:50%" onclick="ToggleMoveOnMap()" />
+				<input type=button value=沿途 style="font-size:50%" onclick="GetDistrict()" />
+				<!--input type=button value=转换 style="font-size:50%" onclick="TransGPS()" /-->
+				<input type=button value=修正 style="font-size:50%" onclick="FixBus()" />
+				<textarea id=text style="height:30%;width:100%;"></textarea>
+			</p>
+		</div>
+		
+		<script type="text/javascript">
+			var leftDiv = document.getElementById("container");
+			var rightDiv = document.getElementById("right");
+			var noTouch = false;
+			if (document.body.clientWidth > document.body.clientHeight)
+			{
+				// 宽屏幕
+				leftDiv.style.width = "70%";
+				rightDiv.style.width = "30%";
+				leftDiv.style.height = "100%";
+				rightDiv.style.height = "100%";
+				
+				MapWidth = document.body.clientWidth * 0.7;
+			}
+			else
+			{
+				// 长屏幕
+				noTouch = true;
+				
+				MapWidth = document.body.clientWidth;
+			}
+			var layer1 = new AMap.TileLayer();
+			LayerSatellite = new AMap.TileLayer.Satellite();
+			map = new AMap.Map('container',
+			{
+				center : new AMap.LngLat(113.268192, 23.158279),
+				zoom : 19,
+				defaultCursor : "Crosshair",
+				mapStyle : 'amap://styles/light', //设置地图的显示样式
+				features : ['bg', 'point', 'road'],
+				touchZoomCenter : 1,
+				layers : [layer1, LayerSatellite],
+				zooms : [3, 19],
+			});
+			LayerSatellite.hide();
+			// 创建 AMap.Icon 实例：
+			var icon = new AMap.Icon(
+			{
+				size: new AMap.Size(30, 30),    // 图标尺寸
+				image: "https://a.amap.com/jsapi_demos/static/demo-center/icons/poi-marker-default.png",
+				imageSize: new AMap.Size(30, 30),   // 根据所设置的大小拉伸或压缩图片
+			});
+			marker = new AMap.Marker(
+			{
+				icon: icon,
+				position:map.getCenter(),
+				offset: new AMap.Pixel(-15, -28)
+			})
+			marker.setMap(map);
+			ICON = new AMap.Icon(
+			{
+				size: new AMap.Size(12, 12),    // 图标尺寸
+				image: "https://a.amap.com/jsapi_demos/static/images/mass2.png",
+				imageSize: new AMap.Size(12, 12),   // 根据所设置的大小拉伸或压缩图片
+			});
+			//BackHome();
+			function MoveMark()
+			{
+				//if (!MovingOnMap)
+				marker.setPosition(map.getCenter());
+			}
+			map.on('mapmove', MoveMark);
+			if (!noTouch)
+				map.on('click', function(e)
+				{
+					AddAPoint(e);
+				});
+			var ZOOM_DRAW = {0:17, 1:15, 2:14, 3:11, 4:7, 5:15, 6:13};
+			var ZOOM_VIEW = {0:17, 1:15, 2:14, 3:11, 4:7, 5:12, 6:9};
+			
+			function AddAPoint(e, getRoad = true)
+			{
+				var point = e.lnglat;
+				AddAPoint2(point);
+				RedrawMap();
+				map.setZoom(ZOOM_DRAW[subpath.type]);
+				map.panTo(point);
+				BackupString = null;
+				
+				if (getRoad)
+					GetRoad(true);
+			}
+			
+			function AddAPoint2(point)
+			{
+				if (paths.length == 0)
+					paths[0] = {
+						time: new Date().getTime(),
+						subpaths: new Array()
+					};
+				var path = paths[paths.length - 1];
+				var subpaths = path.subpaths;
+				if (subpaths.length == 0)
+					subpaths[0] = {
+						type: document.getElementById("type").value,
+						text: "",
+						points: new Array()
+					};
+				var subpath = subpaths[NowSubpath];
+				var points = subpath.points;
+				
+				NowPoint++;
+				points.splice(NowPoint, 0, point);
+				if (NowPoint >= points.length)
+					NowPoint = points.length - 1;
+				_add = true;
+				return true;
+			}
+			
+			function GetPoly(subpath, showLabel)
+			{
+				var color;
+				var width;
+				var zIndex = 50 - subpath.type;
+				if (subpath.type == 0)
+				{
+					color = "blue";
+					width = 4;
+				}
+				if (subpath.type == 1)
+				{
+					color = "purple";
+					width = 4;
+				}
+				if (subpath.type == 2 || subpath.type == 5)
+				{
+					color = "orange";
+					width = 3;
+					
+					if (subpath.text && subpath.text.indexOf("地铁") >= 0)
+					{
+						color = "gray";
+						zIndex = 45;
+					}
+				}
+				if (subpath.type == 3 || subpath.type == 6)
+				{
+					color = "red";
+					width = 3;
+				}
+				if (subpath.type == 4)
+				{
+					color = "gray";
+					width = 1;
+				}
+				var poly = new AMap.Polyline(
+				{
+					path:subpath.points,
+					strokeColor: color,
+					strokeWeight: width,
+					strokeOpacity: 0.8,
+					zIndex : zIndex,
+				});
+				poly.setMap(map);
+				
+				var text1, text2;
+				if (showLabel && subpath.text && subpath.from && subpath.to)
+				{
+					text1 = new AMap.Marker({
+						position : subpath.points[0],
+						icon : ICON,
+						label : { content : subpath.text + ":" + subpath.from, offset : new AMap.Pixel(-10, -20) },
+						offset : new AMap.Pixel(-6, -6),
+					});
+					text1.setMap(map);
+					text2 = new AMap.Marker({
+						position : ArrayLast(subpath.points),
+						icon : ICON,
+						label : { content : subpath.to, offset : new AMap.Pixel(-10, -20) },
+						offset : new AMap.Pixel(-6, -6),
+					});
+					text2.setMap(map);
+				}
+				
+				poly.Text2 = text2;
+				return poly;
+			}
+			
+			function RedrawMap(Rezoom)
+			{
+				map.remove(map.getAllOverlays());
+				for (var pathid = 0; pathid < paths.length; pathid++)
+				{
+					path = paths[pathid];
+					for (var subpathid = 0; subpathid < path.subpaths.length; subpathid++)
+					{
+						subpath = path.subpaths[subpathid];
+						GetPoly(subpath, paths.length == 1);
+					}
+				}
+				
+				if (Rezoom)
+				{
+					map.setFitView(map.getAllOverlays());
+				}
+				//if (paths.length <= 1)
+				marker.setMap(map);
+				//ShowChart();
+			}
+			
+			var paths = new Array();
+			var NowSubpath = 0;
+			var NowPoint = -1;
+			function PolyClickPoint(point)
+			{
+				var mindis = 1e100;
+				var minpoint = null;
+				var minSpId = 0;
+				var minPId = 0;
+				for (var pathid = 0; pathid < paths.length; pathid++)
+				{
+					var path = paths[pathid];
+					for (var subpathid = 0; subpathid < path.subpaths.length; subpathid++)
+					{
+						var points = path.subpaths[subpathid].points;
+						for (var pointid = 0; pointid < points.length; pointid++)
+						{
+							var length = 1e100;
+							if (paths.length == 1)
+								length = GetDis(point, points[pointid]);
+							else
+								if (pointid < points.length - 1)
+									length = AMap.GeometryUtil.distanceToSegment(point, points[pointid], points[pointid + 1]);
+								
+							if (length < mindis)
+							{
+								mindis = length;
+								minpoint = pointid;
+								minSpId = subpathid;
+								minPId = pathid;
+							}
+						}
+					}
+				}
+				if (paths.length > 1)
+				{
+					alert(toYYYYMMDD(paths[minPId].time));
+					return;
+				}
+				NowSubpath = minSpId;
+				NowPoint = minpoint;
+				BackupString = null;
+				var path = paths[minPId];
+				var subpaths = path.subpaths;
+				var subpath = subpaths[NowSubpath];
+				document.getElementById("type").value = subpath.type;
+				document.getElementById("RouteNumber").value = subpath.text;
+				RedrawMap();
+			}
+			
+			function CreateSubpath(type)
+			{
+				if (paths.length == 0)
+					paths[0] = {
+						time: new Date().getTime(),
+						subpaths: new Array()
+					};
+				var path = paths[0];
+				var subpaths = path.subpaths;
+				if ((type == 2 || type == 3)
+					&& (subpaths.length == 0 || (subpaths.length > 0 && (ArrayLast(subpaths).type == 2 || ArrayLast(subpaths).type == 3))))
+					CreateSubpath(0);
+				subpaths.splice(NowSubpath + 1, 0, {
+					type: type,
+					text: "",
+					points: new Array()
+				});
+				var subpath;
+				if (subpaths.length > 1)
+				{
+					NowSubpath++;
+					subpath = subpaths[NowSubpath];
+					var points = subpath.points;
+					var subpath0 = subpaths[NowSubpath - 1];
+					var points0 = subpath0.points;
+					if (points0.length > 0) {
+						var point0 = points0[points0.length - 1];
+						points[0] = point0;
+					}
+				}
+				else
+				{
+					NowSubpath = 0;
+					subpath = subpaths[NowSubpath];
+					subpath.points[0] = marker.getPosition();
+				}
+				NowPoint = 0;
+				map.setZoom(ZOOM_DRAW[subpath.type]);
+			}
+			
+			function DeleteOne()
+			{
+				if (BackupString != null)
+				{
+					LoadDat1(BackupString, true, true);
+					BackupString = null;
+					NowSubpath = BackupNowSubpath;
+					NowPoint = BackupNowPoint;
+					return;
+				}
+				var path = paths[0];
+				var subpaths = path.subpaths;
+				var points = subpaths[NowSubpath].points;
+				if (points.length > 0)
+				{
+					if (NowPoint < 0) NowPoint = 0;
+					points.splice(NowPoint, 1);
+					NowPoint--;
+					//if (NowPoint < 0) NowPoint = 0;
+				}
+				RedrawMap();
+				_add = false;
+			}
+			
+			function CleanMap()
+			{
+				if (!window.confirm("清空"))
+					return;
+				paths = new Array();
+				NowSubpath = 0;
+				NowPoint = -1;
+				RedrawMap();
+			}
+			
+			function ClickMarker(getRoad = true)
+			{
+				var e =
+				{
+					lnglat: map.getCenter()
+				};
+				AddAPoint(e, getRoad);
+			}
+			
+			function SaveDat()
+			{
+				var s = ToJson();
+				document.getElementById("text").value = s;
+				document.getElementById("text").setAttribute("value", s);
+			}
+			
+			function LoadDat()
+			{
+				LoadDat1(document.getElementById("text").value);
+			}
+			
+			function LoadDat1(s, noRezoom, nofilt)
+			{
+				var p = JSON.parse(s);
+				if (p.time)
+				{
+					paths[0] = p;
+				}
+				if (p[0])
+				{
+					paths = p;
+				}
+				for (var pathid = 0; pathid < paths.length; pathid++) {
+					var path = paths[pathid];
+					for (var subpathid = 0; subpathid < path.subpaths.length; subpathid++) {
+						var subpath = path.subpaths[subpathid];
+						var points = subpath.points;
+						if (points.length <= 1 && !nofilt)
+						{
+							path.subpaths.splice(subpathid, 1);
+							subpathid--;
+						}
+						else
+						{
+							NowSubpath = subpathid;
+							NowPoint = points.length - 1;
+						}
+					}
+				}
+				//if (paths.length == 1)
+				//	document.getElementById("DrawMode").checked = true;
+				//else
+				//	document.getElementById("DrawMode").checked = false;
+				RedrawMap(!noRezoom);
+			}
+			
+			function CalcLength()
+			{
+				var name = new Array();
+				var len = new Array();
+				var count = new Array();
+				var index = -1;
+				var tt = '';
+				var total = 0;
+				for (var pathid = 0; pathid < paths.length; pathid++) {
+					var path = paths[pathid];
+					for (var subpathid = 0; subpathid < path.subpaths.length; subpathid++)
+					{
+						var subpath = path.subpaths[subpathid];
+						var points = subpath.points;
+						if (points.length > 1)
+						{
+							if (paths.length == 1)
+							{
+								var ss = "";
+								if (subpath.type == 0)
+									ss += "步行"
+								if (subpath.type == 1)
+									ss += "骑车"
+								if (subpath.type == 2)
+									ss += "公交"
+								if (subpath.type == 3)
+									ss += "列车"
+								if (subpath.type == 4)
+									ss += "飞机"
+								if (subpath.type == 5)
+									ss += "公路"
+								if (subpath.type == 6)
+									ss += "高速"
+								var a = subpath.text && subpath.text.length > 0;
+								var b = subpath.from && subpath.to && subpath.from.length > 0 && subpath.to.length > 0;
+								if (a || b)
+								{
+									ss += "[";
+									if (a)
+										ss += subpath.text;
+									if (a && b)
+										ss += ":";
+									if (b)
+										ss += subpath.from + "→" + subpath.to;
+									ss += "]";
+								}
+								var p1 = { s : subpathid, p : 0 };
+								var p2 = { s : subpathid, p : subpath.points.length - 1 };
+								var l = GetWayDis(p1, p2);
+								var d = l / 1000;
+								ss += d.toFixed(1) + "km";
+								total += d;
+								if (d > 0.5)
+									tt += ss + '\n';
+							}
+							else
+							{
+								var i = 0;
+								var s = subpath.type + '_' + subpath.text;
+								while (i <= index && name[i] != s)
+									i++;
+								if (i > index) {
+									index = i;
+									name[index] = s;
+									len[index] = 0;
+									count[index] = 0;
+								}
+								count[i]++;
+								for (var pointid = 0; pointid < points.length - 1; pointid++) {
+									pointA = points[pointid];
+									pointB = points[pointid + 1];
+									var dis = GetDis(pointA, pointB);
+									len[i] += dis;
+								}
+							}
+						}
+					}
+				}
+				for (var i = 0; i <= index; i++)
+					tt += name[i] + ':' + (len[i] / 1000) + '(' + count[i] + ')\n';
+				if (paths.length == 1)
+					tt += "\n合计：" + total.toFixed(1) + "km\n";
+				document.getElementById("text").value = tt;
+			}
+			
+			function ArrayLast(data)
+			{
+				return data[data.length - 1];
+			}
+			
+			function AutoNamePic()
+			{
+				GetAddress(map.getCenter(), GeoCoderCallBack);
+			}
+			
+			function toYYYYMMDD(time)
+			{
+				var d = new Date(time);
+				var dd = d.getDate() < 10 ? "0" + d.getDate() : d.getDate().toString();
+				var mm = d.getMonth() < 9 ? "0" + (d.getMonth() + 1) : (d.getMonth() + 1).toString();
+				var yyyy = d.getFullYear().toString();
+				return yyyy + mm + dd;
+			}
+			
+			function GeoCoderCallBack(data)
+			{
+				AMap.convertFrom([data.lng, data.lat], 'gps', function (status, result) {
+					//console.log(data, result);
+					var lng1 = data.lng * 2 - result.locations[0].lng + Math.random() * 0.000001;
+					var lat1 = data.lat * 2 - result.locations[0].lat + Math.random() * 0.000001;
+					document.getElementById("text").value = data.district + data.street + toYYYYMMDD(paths[0].time) + "(" + lng1.toFixed(9) + "," + lat1.toFixed(9) + ")";					
+				});
+			}
+			
+			function GetWayDis(p1, p2)
+			{
+				var dis = 0;
+				if (p1.s == p2.s)
+					for (var i = p1.p; i < p2.p; i++)
+						dis += GetDis(paths[0].subpaths[p1.s].points[i], paths[0].subpaths[p1.s].points[i + 1]);
+				else {
+					for (var i = p1.p; i < paths[0].subpaths[p1.s].points.length - 1; i++)
+						dis += GetDis(paths[0].subpaths[p1.s].points[i], paths[0].subpaths[p1.s].points[i + 1]);
+					for (var j = p1.s + 1; j <= p2.s - 1; j++)
+						for (var i = 0; i < paths[0].subpaths[j].points.length - 1; i++)
+							dis += GetDis(paths[0].subpaths[j].points[i], paths[0].subpaths[j].points[i + 1]);
+					for (var i = 0; i < p2.p; i++)
+						dis += GetDis(paths[0].subpaths[p2.s].points[i], paths[0].subpaths[p2.s].points[i + 1]);
+				}
+				return dis;
+			}
+			
+			function GenKeyPoint(Ps)
+			{
+				if (Ps.length > 100)
+					return Ps;
+			
+				//console.log(Ps, rate)
+				for (var i9 = 0; i9 < Ps.length - 1; i9++)
+				{
+					var p1 = Ps[i9];
+					var p2 = Ps[i9 + 1];
+					var sp = paths[0].subpaths[p1.s].points[p1.p];
+					var ep = paths[0].subpaths[p2.s].points[p2.p];
+					var linearDis = GetDis(sp, ep);
+					var rate = 0;
+					if (Ps.length > 2)
+					{
+					    var newRate = 16000 / (linearDis + 1) + 1.2;
+						//alert(linearDis + "   " + newRate);
+						rate = newRate;
+					}
+					if (GetWayDis(p1, p2) > linearDis * rate) {
+						var p = {
+							s: 0,
+							p: 0
+						};
+						var max = 0;
+						if (p1.s == p2.s)
+						{
+							for (var i = p1.p + 1; i <= p2.p - 1; i++)
+							{
+								var pi = paths[0].subpaths[p1.s].points[i];
+								var d = GetDis(pi, sp) + GetDis(pi, ep);
+								if (d > max) {
+									max = d;
+									p = {
+										s: p1.s,
+										p: i
+									};
+								}
+							} 
+						}
+						else
+						{
+							for (var i = p1.p + 1; i < paths[0].subpaths[p1.s].points.length; i++)
+							{
+								var pi = paths[0].subpaths[p1.s].points[i];
+								var d = GetDis(pi, sp) + GetDis(pi, ep);
+								if (d > max) {
+									max = d;
+									p = {
+										s: p1.s,
+										p: i
+									};
+								}
+							}
+							for (var j = p1.s + 1; j <= p2.s - 1; j++)
+							{
+								for (var i = 0; i < paths[0].subpaths[j].points.length; i++)
+								{
+									var pi = paths[0].subpaths[j].points[i];
+									var d = GetDis(pi, sp) + GetDis(pi, ep);
+									if (d > max) {
+										max = d;
+										p = {
+											s: j,
+											p: i
+										};
+									}
+								}
+							}
+							for (var i = 0; i <= p2.p - 1; i++)
+							{
+								var pi = paths[0].subpaths[p2.s].points[i];
+								var d = GetDis(pi, sp) + GetDis(pi, ep);
+								if (d > max) {
+									max = d;
+									p = {
+										s: p2.s,
+										p: i
+									};
+								}
+							}
+						}
+						
+						Ps.splice(i9 + 1, 0, p);
+						//console.log(p1, p2, p, Ps);
+						
+						GenKeyPoint(Ps);
+						
+						return Ps;
+					}
+				}
+				
+				return Ps;
+			}
+			
+			function Name2(cb)
+			{
+				FitAll(); 
+				var Ps = new Array();
+				Ps[0] = {
+					s: 0,
+					p: 0
+				};
+				Ps[1] = {
+					s: paths[0].subpaths.length - 1,
+					p: ArrayLast(paths[0].subpaths).points.length - 1
+				}
+				Ps = GenKeyPoint(Ps, 0);
+				var pointList = [];
+				for (var i = 1; i < Ps.length - 1; i++)
+				{
+					pointList[i - 1] = paths[0].subpaths[Ps[i].s].points[Ps[i].p];
+				}
+				GetAddress(pointList, function(data){
+					//console.log(data);
+				
+					var nameString = "";
+					for (var i = 0; i < data.length; i++)
+					{
+						if (nameString.length != 0)
+							nameString += '-';
+						nameString += data[i].district + data[i].street;
+					}
+					
+					var fileName = toYYYYMMDD(paths[0].time) + nameString + ".road"
+					document.getElementById("text").value = fileName;
+					
+					if (cb != null)
+						cb(fileName);					
+				});
+			}
+			
+			function GetAddress(point, cb)
+			{
+				//console.log(point, Psii)
+				//AMap.convertFrom([point.lng, point.lat], 'baidu', function (status, result)
+				var geo = new AMap.Geocoder(
+				{
+					extensions:"all",
+					radius:400,
+				});
+				geo.getAddress(point, function(status, result)
+				{
+					//console.log(status, result)
+					if (status === 'complete' && result.info === 'OK')
+					{
+						function Fix(data)
+						{
+							var info = data.addressComponent;
+							//console.log(data)
+							var rid = 0;
+							while (rid < data.roads.length)
+							{
+								var road = data.roads[rid].name;
+								if (road.indexOf("辅路") >= 0 || road.indexOf("高架") >= 0 || road.indexOf("隧道") >= 0 || road.indexOf("高速") >= 0)
+									data.roads.splice(rid, 1);
+								else
+									rid++;
+							}
+							if (data.roads.length > 0)
+							{
+								//info.FixBus = result.regeocode.roads[0].name;
+								info.street = data.roads[0].name;
+							}
+							else
+							{
+								//info.FixBus = null;
+								info.street = info.township;
+							}
+							if (info.city == "")
+							{
+								info.city = info.province;
+							}
+							if (info.district == "")
+							{
+								info.district = info.city;
+							}
+							
+							return info;
+						}
+						
+						if (result.regeocodes)
+						{
+							for (var i = 0; i < result.regeocodes.length; i++)
+							{
+								result.regeocodes[i] = Fix(result.regeocodes[i]);
+								
+								result.regeocodes[i].lng = point[i].lng;
+								result.regeocodes[i].lat = point[i].lat;
+							}
+							cb(result.regeocodes);
+						}
+						else
+						{
+							var info = Fix(result.regeocode);
+							
+							info.lng = point.lng;
+							info.lat = point.lat;
+							cb(info);
+						}
+					}
+				});
+			}
+			
+			function AutoNameAndSave()
+			{
+				Name2(function(fileName){
+					//document.getElementById("text").setAttribute("value", fileName);
+					download(ToJson(), fileName, "text/plain"); //download.js (fileName, paths[0]);
+				});
+			}
+			
+			var tempString = "";
+			var tempCount = 0;
+			function SelectAndOpenDAT()
+			{
+				inputObj = document.createElement('input');
+				inputObj.setAttribute('id','_ef');
+				inputObj.setAttribute('type','file');
+				inputObj.setAttribute('multiple','multiple');
+				inputObj.setAttribute("style",'visibility:hidden');
+				document.body.appendChild(inputObj);
+				inputObj.onchange = function ()
+				{
+					tempString = "[";
+					tempCount = 0;
+					var reg1 = /\.jpg/;
+					var reg2 = /\.JPG/;
+					var reg3 = /\.JPEG/;
+					var reg4 = /\.jpeg/;
+					for (var i = 0; i < inputObj.files.length; i++)
+					{
+						var resultFile = inputObj.files[i];
+						if (resultFile)
+						{
+							var reader = new FileReader();
+							if (!reg1.test(resultFile.name) && !reg2.test(resultFile.name) && !reg3.test(resultFile.name) && !reg4.test(resultFile.name))
+							{
+								tempCount++;
+								reader.onload = function (e)
+								{
+									//console.log(this.result);
+									tempCount--;
+									var urlData = this.result;
+									tempString += urlData;
+									if (tempCount == 0)
+									{
+										tempString += "]";
+										//document.getElementById("text").value = tempString;
+										LoadDat1(tempString);
+									}
+									else
+										tempString += ",";
+								};
+								reader.readAsText(resultFile, 'UTF-8');
+							}
+						}
+					}
+				}
+				inputObj.click();
+				document.body.removeChild(inputObj);
+			}
+			
+			function AddDate(count)
+			{
+				if (paths.length > 0)
+				{
+					p = paths[0];
+					p.time += 86400000 * count;
+				}
+			}
+			
+			var _add = true;
+			function GetRoad(mustTransfer, noBackup)
+			{
+				var path = paths[0];
+				var subpath = path.subpaths[NowSubpath];
+				if (subpath.points.length < 2)
+				    return;
+				if (!_add && NowPoint < subpath.points.length - 1)
+					NowPoint++;
+				var nowPoint = subpath.points[NowPoint];
+				var lastPoint = subpath.points[NowPoint - 1];
+				var routeSearcher = null;
+				if (subpath.type == 0)
+					routeSearcher = new AMap.Walking();
+				if (subpath.type == 1)
+					routeSearcher = new AMap.Riding();
+				if (subpath.type == 5)
+					routeSearcher = new AMap.Driving(
+					{
+						policy:AMap.DrivingPolicy.LEAST_FEE
+					});
+				if (subpath.type == 6)
+					routeSearcher = new AMap.Driving(
+					{
+						policy:AMap.DrivingPolicy.LEAST_TIME
+					});
+				if (routeSearcher != null)
+				{
+					//根据起终点坐标规划步行路线
+					routeSearcher.search(lastPoint, nowPoint, function(status, result)
+					{
+						// result即是对应的步行路线数据信息，相关数据结构文档请参考  https://lbs.amap.com/api/javascript-api/reference/route-search#m_WalkingResult
+						if (status === 'complete')
+						{
+							//console.log('绘制步行路线完成', result);
+							var path = paths[0];
+							var subpath = path.subpaths[NowSubpath];
+							var type = subpath.type;
+							var r = result.routes[0].steps;
+							if (!r)
+								r = result.routes[0].rides;
+							BackupString = null;
+							DeleteOne();
+							Backup();
+							for (var i = 0; i < r.length; i++)
+							{
+								var points = r[i].path;
+								for (var j = 0; j < points.length; j++)
+								{
+									var point = points[j];
+									AddAPoint2(point);
+								}
+							}
+							RedrawMap();
+						}
+						else
+						{
+							//console.log('步行路线数据查询失败' + result);
+						}
+					});
+				}
+				else
+				{
+					// 公交或火车
+					var start = subpath.points[0];
+					var end = ArrayLast(subpath.points);
+					// 获取起终点城市
+					var arr = new Array();
+					arr[0] = start;
+					arr[1] = end;
+					new AMap.Geocoder().getAddress(arr, function(status, result)
+					{
+						function GetCity(info)
+						{
+							if (info.city == "")
+								return info.province;
+							else
+								return info.city;
+						}
+						var city1 = GetCity(result.regeocodes[0].addressComponent);
+						var city2 = GetCity(result.regeocodes[1].addressComponent);
+						if (subpath.text.length == 0 || mustTransfer)
+						{
+							var transfer = new AMap.Transfer(
+							{
+								city:city1,
+								policy:AMap.TransferPolicy.LEAST_TRANSFER,
+								cityd:city2,
+								extensions:"all",
+							});
+							transfer.search(start, end, function(status, result)
+							{
+								//console.log(status, result);
+								// result即是对应的步行路线数据信息，相关数据结构文档请参考  https://lbs.amap.com/api/javascript-api/reference/route-search#m_WalkingResult
+								if (status === 'complete')
+								{
+									//console.log('绘制步行路线完成', result);
+									var num = result.plans.length;
+									for (var i = 0; i < num; i++)
+									{
+										var plan = result.plans[i];
+										var busCount = 0;
+										var segment = null;
+										var walk = null;
+										for (var j = 0; j < plan.segments.length; j++)
+										{
+											if (plan.segments[j].transit_mode != "WALK")
+											{
+												busCount++;
+												segment = plan.segments[j];
+											}
+											else
+											{
+												if (walk == null && busCount == 0)
+													walk = plan.segments[j].transit.path;
+											}
+										}
+										if (busCount == 1)
+										{
+											//console.log(plan, segment);
+											var line = segment.transit;
+											if (line.on_station == null)
+												line.on_station = line.departure_stop;
+											var on = line.on_station.name;
+											if (line.off_station == null)
+												line.off_station = line.arrival_stop;
+											var off = line.off_station.name;
+											if (line.lines == null)
+											{
+												line.lines = new Array();
+												line.lines[0] = {name:line.name};
+												for (var alterID = 0; alterID < line.alters.length; alterID++)
+												{
+													line.lines[alterID + 1] = { name:line.alters[alterID].name };
+												}
+											}
+											for (var j = 0; j < line.lines.length; j++)
+											{
+												if (window.confirm(line.lines[j].name + "(" + on + "→" + off + ")"))
+												{
+													Backup();
+													//console.log(walk, line);
+													if (walk && NowSubpath > 0)
+													{
+														NowSubpath--;
+														if (paths[0].subpaths[NowSubpath].type == 0)
+														{
+															NowPoint = paths[0].subpaths[NowSubpath].points.length - 1;
+															for (var k = 0; k < walk.length; k++)
+																AddAPoint2(walk[k]);
+														}
+														NowSubpath++;
+													}
+													var path = line.path;
+													subpath.points = new Array();
+													NowPoint = 0;
+													if (!path || !path.length)
+													{
+														path = [];
+														path[0] = line.departure_stop.location;
+														for (var k = 0; k < line.via_stops.length; k++)
+														{
+															path[k + 1] = line.via_stops[k].location;
+														}
+														path[line.via_stops.length + 1] = line.arrival_stop.location;
+													}
+													if (path && path.length)
+													{
+														for (var k = 0; k < path.length; k++)
+														{
+															var point = path[k];
+															AddAPoint2(point);
+														}
+													}
+													if (NowSubpath > 0)
+													{
+														var up = paths[0].subpaths[NowSubpath - 1].points;
+														if (up.length == 1)
+															up.splice(1, 0, up[0]);
+														if (up.length > 0)
+															up[up.length - 1] = path[0];
+													}
+													if (NowSubpath < paths[0].subpaths.length - 1)
+													{
+														var down = paths[0].subpaths[NowSubpath + 1].points;
+														if (down.length > 0)
+															down[0] = ArrayLast(path);
+													}
+													paths[0].subpaths[NowSubpath].from = on;
+													paths[0].subpaths[NowSubpath].to = off;
+													var lineName = CutName(line.lines[j].name);
+													document.getElementById("RouteNumber").value = lineName;
+													paths[0].subpaths[NowSubpath].text = lineName;
+													RedrawMap();
+													
+													if (j > 0)
+														GetRoad(false, true);
+													
+													return;
+												}
+											}
+										}
+									}
+								}
+								else
+								{
+									//console.log('步行路线数据查询失败' + result);
+								}
+							});
+						}
+						else
+						{
+							var bls = new AMap.LineSearch(
+							{
+								city:city1,
+								extensions:"all",
+							});
+							bls.search(subpath.text, function(status, result)
+							{
+								//console.log(result);
+								if (!result.lineInfo)
+									return;
+								for (var lineID = 0; lineID < result.lineInfo.length; lineID++)
+								{
+								    var lineInfo = result.lineInfo[lineID];
+									for (var i = 0; i < lineInfo.via_stops.length; i++)
+									{
+										var station = lineInfo.via_stops[i];
+										var pos = station.location;
+										var dis = GetDis(start, pos);
+										//console.log(station, pos, dis);
+										if (dis < 200)
+										{
+											for (var j = i + 1; j < lineInfo.via_stops.length; j++)
+											{
+												var station2 = lineInfo.via_stops[j];
+												var pos2 = station2.location;
+												var dis2 = GetDis(end, pos2);
+												//console.log(station2, pos2, dis2);
+												if (dis2 < 200)
+												{
+													var s = lineInfo.name + ' ' + station.name + '-' + station2.name;
+													if (window.confirm(s))
+													{
+														if (!noBackup)
+															Backup();
+														var d1 = d2 = 9999999999;
+														var p1 = p2 = -1;
+														var path = lineInfo.path;
+														for (var k = 0; k < path.length; k++)
+														{
+															var disA = GetDis(pos, path[k]);
+															var disB = GetDis(pos2, path[k]);
+															if (disA < d1)
+															{
+																d1 = disA;
+																p1 = k;
+															}
+															if (disB < d2)
+															{
+																d2 = disB;
+																p2 = k;
+															}
+														}
+														//console.log(d1, d2);
+														subpath.points = new Array();
+														NowPoint = 0;
+														//AddAPoint2(station.position);
+														for (var k = p1; k <= p2; k++)
+															AddAPoint2(path[k]);
+														//AddAPoint2(station2.position);
+														if (NowSubpath > 0)
+														{
+															var up = paths[0].subpaths[NowSubpath - 1].points;
+															if (up.length == 1)
+																up.splice(1, 0, up[0]);
+															if (up.length > 0)
+																up[up.length - 1] = path[p1];
+														}
+														if (NowSubpath < paths[0].subpaths.length - 1)
+														{
+															var down = paths[0].subpaths[NowSubpath + 1].points;
+															if (down.length > 0)
+																down[0] = path[p2];
+														}
+														subpath.from = station.name;
+														subpath.to = station2.name;
+														RedrawMap();
+														return;
+													}
+												}
+											}
+										}
+									}
+								}
+							});
+						}
+					});
+				}
+			}
+			
+			function CutName(name, filter)
+			{
+				if (filter == null)
+					filter = ["路", "号线", "线"];
+				var lineName = name;
+				var idx = lineName.indexOf('(');
+				if (idx > 0)
+					lineName = lineName.substr(0, idx);
+				//console.log(lineName)
+				for (var id = 0; id < filter.length; id++)
+				{
+					var s = filter[id];
+					if (lineName.endsWith(s))
+					{
+						lineName = lineName.substr(0, lineName.length - s.length);
+					}
+				}
+				return lineName;
+			}
+			
+			function SetParam()
+			{
+				var path = paths[0];
+				var subpaths = path.subpaths;
+				var subpath = subpaths[NowSubpath];
+				subpath.type = document.getElementById("type").value;
+				subpath.text = document.getElementById("RouteNumber").value;
+				RedrawMap();
+			}
+			
+			function BackHome()
+			{
+				if (paths == null || paths.length == 0)
+				{
+					geolocation = new AMap.Geolocation(
+					{
+						timeout: 20000,
+						enableHighAccuracy : true,//是否使用高精度定位，默认:true
+						GeoLocationFirst : true,
+					});
+					geolocation.getCurrentPosition(function(status, result)
+					{
+						marker.setPosition(result.position);
+						map.panTo(result.position);
+						//console.log(status, result);
+					});
+					return;
+				}
+				var home = paths[0].subpaths[0].points[0]
+				var point = home;
+				AddAPoint2(point);
+				RedrawMap();
+				map.setZoom(ZOOM_DRAW[subpath.type]);
+				map.panTo(point);
+				BackupString = null;
+				
+				GetRoad(true);				
+			}
+			
+			function DrawBus()
+			{
+				document.getElementById("text").value = "";
+				map.remove(map.getAllOverlays());
+				//if (paths.length <= 1)
+				marker.setMap(map);
+				var blss = {};
+				var center = marker.getPosition();
+				var search = new AMap.PlaceSearch(
+				{
+					pageSize:50,
+					//type:"公交车站|地铁站",
+				});
+				limitDis = 800;
+				var list = ["公交站", "地铁站", "码头"];
+				for (var listid = 0; listid < list.length; listid++)
+				{
+					search.searchNearBy(list[listid], center, limitDis, function(status, result)
+					{
+						//console.log(status, result);
+						if (!result.poiList)
+							return;
+						
+						var count1 = result.poiList.pois.length;
+						for (var i = 0; i < count1; i++)
+						{
+							var ri = result.poiList.pois[i];
+							//console.log(ri);
+							var ss = new AMap.StationSearch();
+							ss.searchById(ri.id, function(status, result)
+							{
+								//console.log(status, result);
+								for (var j = 0; j < result.stationInfo[0].buslines.length; j++)//
+								{
+									var line = result.stationInfo[0].buslines[j];
+									if (blss[line.id] == null)
+									{
+										blss[line.id] = true;
+										var ls = new AMap.LineSearch(
+										{
+											extensions:"all",
+										});
+										ls.searchById(line.id, function(status, result)
+										{
+											if (!result.lineInfo)
+												return;
+										
+											var info = result.lineInfo[0];
+											//console.log(status, result);
+											if (parseInt(info.status) != 1)
+												return;
+											//console.log(info);
+											var name = CutName(info.name);
+											//console.log(name);
+											if (name.length > 15 || info.company.length < 2)
+												return;
+											//var p1 = parseInt(info.basic_price);
+											//if (p1 == 0)
+											//	return;
+											var p2 = parseInt(info.total_price);
+											//if (p2 == 0)
+											//	return;
+											var color = "#ff0000";
+											if (p2 == 0)
+												p2 = 20;
+											if (p2 <= 4)
+												color = "#aa00aa";
+											if (p2 <= 3)
+												color = "#0000ff";
+											if (p2 <= 2)
+												color = "#00aaaa";
+											if (p2 <= 1)
+												color = "#00ff00";
+												
+											var poly = new AMap.Polyline(
+											{
+												path:info.path,
+												strokeColor: color,
+												strokeOpacity: 0.8,
+												zIndex:60 - p2,
+											});
+											poly.setMap(map);
+											var text = new AMap.Text(
+											{
+												text:name,
+												position:info.path[0],
+												zIndex:60 - p2,
+											});
+											text.setMap(map);
+											//console.log(info, info.name, name);//, info.basic_price, info.total_price);
+										});
+									}
+								}
+							});
+						}
+					});
+				}
+			}
+			
+			function GetDis(point1, point2)
+			{
+				//console.log(point1, point2)
+				return AMap.GeometryUtil.distance(point1, point2);
+			}
+			
+			function Backup()
+			{
+				BackupNowSubpath = NowSubpath;
+				BackupNowPoint= NowPoint;
+				BackupString = ToJson();
+			}
+			
+			function Search(str)
+			{
+				var search = new AMap.PlaceSearch(
+				{
+					pageSize:3,
+				});
+				search.search(str, function(status, result)
+				{
+					//console.log(status, result);
+					if (result != null && result.cityList)
+					{
+						var city = result.cityList[0].name;
+						Search(city + str);
+						return;
+					}
+					if (result != null && result.poiList != null && result.poiList.pois != null)
+					{
+						for (var i = 0; i < result.poiList.pois.length; i++)
+						{
+							var poi = result.poiList.pois[i];
+							if (window.confirm(poi.name + "\n" + poi.address))
+							{
+								map.setZoom(16);
+								map.panTo(poi.location);
+								return;
+							}
+						}
+					}
+				});
+			}
+			
+			MoveOnMapScript = null;
+			function ToggleMoveOnMap()
+			{
+				if (!MoveOnMapScript)
+				{
+					MoveOnMapScript = document.createElement('script');
+					
+					// 设置 script 元素的属性
+					MoveOnMapScript.src = 'js/ViewTrack.js';
+					MoveOnMapScript.onload = function(){MoveOnMap();};
+
+					// 将 script 元素添加到 head 或 body 部分
+					document.getElementsByTagName('head')[0].appendChild(MoveOnMapScript);
+				}
+				else
+					MoveOnMap();
+			}
+			
+			function ToJson()
+			{
+				return JSON.stringify(paths[0], function(key, value)
+				{
+					if (value && value.lng && value.lat && value.Q && value.R)
+						return [ Number(value.lng.toFixed(6)), Number(value.lat.toFixed(6)) ];
+					return value;
+				});
+			}
+			
+			function FitPath(path, begin, end, minDis)
+			{
+				var maxDis = -1;
+				var maxIdx = -1;
+				for (var idx = end - 1; idx >= begin + 1; idx--)
+				{
+					var dis = AMap.GeometryUtil.distanceToSegment(path[idx], path[begin], path[end]);
+					if (dis > maxDis)
+					{
+						maxDis = dis;
+						maxIdx = idx;
+					}
+				}
+				//console.log(path, begin, end, maxDis, maxIdx, minDis);
+				if (maxDis < minDis)
+				{
+					var deleteCount = (end - 1) - (begin + 1) + 1;
+					if (deleteCount > 0)
+						path.splice(begin + 1, deleteCount);
+				}
+				else
+				{
+					FitPath(path, maxIdx, end, minDis);
+					FitPath(path, begin, maxIdx, minDis);
+				}
+			}
+			
+			function FitAll()
+			{
+				if (paths.length > 1)
+					return;
+				var pos = paths[0].subpaths[NowSubpath].points[NowPoint];
+				for (var idx = 0; idx < paths[0].subpaths.length; idx++)
+				{
+					if (paths[0].subpaths[idx].points.length <= 1)
+					{
+						paths[0].subpaths.splice(idx, 1);
+						idx--;
+					}
+					else
+					{
+						var fitParam = 10;
+						if (paths[0].subpaths[idx].type == 0) fitParam = 2;
+						if (paths[0].subpaths[idx].type == 1) fitParam = 4;
+						//console.log(paths[0].subpaths[idx].points, 0, paths[0].subpaths[idx].points.length - 1, fitParam);
+						FitPath(paths[0].subpaths[idx].points, 0, paths[0].subpaths[idx].points.length - 1, fitParam);
+						//console.log(paths[0].subpaths[idx].points, 0, paths[0].subpaths[idx].points.length - 1, fitParam);
+					}
+				}
+				if (pos != null)
+					PolyClickPoint(pos);
+				RedrawMap(false);
+			}
+			
+			Satel = false;
+			function ButtonSatel()
+			{
+				if (Satel)
+				{
+					Satel = false;
+					LayerSatellite.hide();
+				}
+				else
+				{
+					Satel = true;
+					LayerSatellite.show();
+				}
+			}
+			
+			//const ROUND_LEVEL = 0.01;			
+			function GetDistrict()
+			{
+				var lastPoint = null;
+				var pointList = [];
+				//var pointHash = {};
+				for (var i = 0; i < paths.length; i++)
+				{
+					for (var j = 0; j < paths[i].subpaths.length; j++)
+					{
+						for (var k = 0; k < paths[i].subpaths[j].points.length; k++)
+						{
+							var point = paths[i].subpaths[j].points[k];
+							var dis = 99999999;
+							if (lastPoint != null)
+								dis = GetDis(point, lastPoint);
+							if (dis > 3000)
+							{
+								pointList[pointList.length] = point;
+								lastPoint = point;
+							}
+						}
+					}
+				}
+				console.log(pointList);
+				
+				function DoOne()
+				{
+					var point = pointList[i];
+					GetAddress(point, function(data)
+					{
+						console.log(data.township);
+						var text = new AMap.Text(
+						{
+							text:data.township,
+							position:point,
+						});
+						text.setMap(map);
+						
+						if (i < pointList.length - 1)
+						{
+							i++;
+							setTimeout(DoOne, 500);
+						}
+					});
+				}
+				i = 0;
+				DoOne();				
+			}
+			
+			function TransGPS()
+			{
+				inputObj = document.createElement('input');
+				inputObj.setAttribute('id','_ef');
+				inputObj.setAttribute('type','file');
+				inputObj.setAttribute("style",'visibility:hidden');
+				document.body.appendChild(inputObj);
+				inputObj.onchange = function ()
+				{
+					var resultFile = inputObj.files[0];
+					if (resultFile)
+					{
+						var reader = new FileReader();
+						reader.onload = function (e)
+						{
+							var urlData = this.result;
+							//console.log(urlData)
+							var s = urlData;
+							s = s.substr(s.indexOf("<coordinates>")+"<coordinates>".length);
+							s = s.substr(0,s.indexOf("</coordinates>"));
+							s = s.replaceAll(" ", "],[");
+							s = "[[" + s + "]]";
+							
+							var j = JSON.parse(s);
+							paths[0].subpaths[NowSubpath].points = j;
+							FitAll();
+							Do20(0);
+						}
+						reader.readAsText(resultFile, 'UTF-8');
+					}
+				}
+				inputObj.click();
+				document.body.removeChild(inputObj);
+			
+				function Do20(id)
+				{
+					var point = [];
+					var next = id;
+					for (var i = id; i < id + 20 && i < paths[0].subpaths[NowSubpath].points.length; i++)
+					{
+						point[point.length] = paths[0].subpaths[NowSubpath].points[i];
+						next = i + 1;
+					}						
+					
+					AMap.convertFrom(point, 'gps', function (status, result) {
+						//console.log(result);
+						if (result.info === 'ok')
+						{
+							var path2 = result.locations;
+							for (var i = 0; i < path2.length; i++)
+								paths[0].subpaths[NowSubpath].points[i + id] = path2[i];
+						}
+					});
+					
+					//console.log(next, paths[0].subpaths[NowSubpath].points.length);
+					if (next < paths[0].subpaths[NowSubpath].points.length)
+					{
+						setTimeout(function(){Do20(next);}, 100);
+					}
+					else
+					{
+						//console.log("aaa");
+						setTimeout(RedrawMap, 1000);
+					}
+				}
+				//
+			}
+			
+			function FixBus()
+			{
+				//var js = ToJson();
+				var p = paths[0];
+				//paths[1] = p;
+				Backup();
+			
+				//for (var i = 0; i < p.subpaths.length; i++)
+				i = NowSubpath;
+				{
+					if (p.subpaths[i].type == 2)
+					{
+						//console.log(p.subpaths[i]);
+						
+						var pathParam = [];
+						for (var j = 0; j < p.subpaths[i].points.length; j++)
+						{
+							var point = p.subpaths[i].points[j];
+							var speed = 40; // km/h
+							
+							var x = point.lng ? point.lng : point[0];
+							var y = point.lat ? point.lat : point[1];
+							if (j > 0)
+							{
+								var dis = GetDis(point, p.subpaths[i].points[j - 1]);
+								var time = dis / 1000 / speed * 3600;
+							
+								var last = p.subpaths[i].points[j - 1];
+								var lastx = last.lng ? last.lng : last[0];
+								var lasty = last.lat ? last.lat : last[1];
+								var deltax = x - lastx;
+								var deltay = y - lasty;
+								var c = Math.sqrt(deltax * deltax + deltay * deltay);
+								var cos = deltay / c;
+								var acos = Math.acos(cos) / Math.PI * 180;
+								if (deltax < 0)
+								{
+									acos = 360 - acos;
+								}
+								var ag = acos;								
+								
+								var n = Math.round(time / 5);
+								if (n < 0 || j == 0)
+									n = 1;
+								for (var k = 1; k <= n; k++)
+								{
+									var x1 = (x - lastx) * k / n + lastx;
+									var y1 = (y - lasty) * k / n + lasty;
+									pathParam[pathParam.length] = {"x": x1 ,"y": y1 ,"sp": speed ,"ag": ag , "tm": time / n};
+								}
+							}
+							else
+								pathParam[pathParam.length] = {"x": x ,"y": y ,"sp": speed ,"ag": 0 , "tm": 1111111};
+						}
+												
+						//console.log(pathParam);
+						var ag = new AMap.GraspRoad();
+						ag.driving(pathParam, function(err, result){
+							//console.log(err, result);
+							p.subpaths[i].points = [];
+							for (var j = 0; j < result.data.points.length; j++)
+							{
+								var point = result.data.points[j];
+								p.subpaths[i].points[p.subpaths[i].points.length] = [point.x, point.y];
+							}
+							//p.subpaths[i].points = result.data.points;
+						});
+						setTimeout(RedrawMap, 1000);
+						//break;
+					}
+				}
+			}
+		</script>
+	</body>
+</html>
