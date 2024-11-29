@@ -1572,6 +1572,8 @@
 				//for (var i = 0; i < p.subpaths.length; i++)
 				i = NowSubpath;
 				{
+					if (p.subpaths[i].type == 3)
+						TransGPS();
 					if (p.subpaths[i].type == 2)
 					{
 						//console.log(p.subpaths[i]);
