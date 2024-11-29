@@ -1,0 +1,1093 @@
+﻿<html> 
+    <head>  
+        <meta name="viewport" content="initial-scale=1.0, user-scalable=no">  
+        <!--meta http-equiv="Content-Type" content="text/html; charset=utf-8" /-->  
+        <title>Bus</title>  
+        <!--script src="http://api.map.baidu.com/api?v=3.0&ak=BA7a941611feddd5977215b8b08afbb8"></script-->
+        <!--script src="http://cdn.hcharts.cn/jquery/jquery-2.1.4.min.js"></script-->
+        <script type="text/javascript">
+            window._AMapSecurityConfig = 
+            {
+                securityJsCode:'128bd45e3f7532dffbf4134c153dbbd9',
+            }
+        </script>
+        <script type="text/javascript" src="https://webapi.amap.com/maps?v=1.4.15&key=cf6edf5f08c0c90141db2148d8b0280c&plugin=AMap.Geocoder,AMap.Driving,AMap.PlaceSearch"></script>
+        <!--script src="http://cdn.hcharts.cn/highcharts/highcharts.js"></script-->
+    </head>  
+       <body>
+        <div id=container style="height:65%;width:100%;float:left;"></div>
+        <div id=right style="height:25%;width:100%;float:left;">
+            <br>
+            <p>
+				<input type=button value=切换 onclick="SwitchLine()" />
+				<input type=text id=RouteNumber style="width:50px;"/>
+				<input type=text id=color style="width:50px;"/>				
+				<input type=button value=标记 onclick="ClickMarker()" />
+				<input type=button value=删点 onclick="DeleteOne()" />
+				<input type=button value=保存 onclick="AutoNameAndSave(false)" />
+				<input type=button value=合并 onclick="AutoNameAndSave(true)" />
+				<input type=button value=读取 onclick="SelectAndOpenDAT()" />
+				<input type=button value=test onclick="TestRoad()" />
+				<br>
+				<a id=fromTo></a>				
+				<a id=length>0/0</a>
+            </p>
+            <p>
+				<input type=button value=输出 onclick="SaveDat()" style="font-size:50%"/>
+				<input type=button value=输入 onclick="LoadDat()" style="font-size:50%"/>
+				<input type=text id=SearchBox style="width:80px;font-size:50%"/>
+				<input type=button value=搜索 style="font-size:50%" onclick="Search(document.getElementById('SearchBox').value)" />
+                  <input type=button value="+" style="font-size:50%" onclick="AddEditIndex(1)" />
+                  <input type=button value="-" style="font-size:50%" onclick="AddEditIndex(-1)" />
+				  <a id=nowSt>1.</a>
+				<textarea id=text style="height:30%;width:100%;"></textarea>        
+            </p>
+            <!--iframe id=myIframe name="myIframe" style="height:10%;width:100%;"></iframe-->
+            <!--form action="提交的action" method="post" target="myIframe" id=form></form-->
+         </div>
+        <!--div id=chart style="height:100%;width:100%;"></div-->
+        <!--script src="fix.js"></script-->
+        <script type="text/javascript">
+			var isWin = (navigator.platform == "Win32") || (navigator.platform == "Windows");
+
+			var leftDiv = document.getElementById("container");
+			var rightDiv = document.getElementById("right");
+			var noTouch = false;
+			if (document.body.clientWidth > document.body.clientHeight)
+			{
+				// 宽屏幕
+				leftDiv.style.width = "70%";
+				rightDiv.style.width = "30%";
+
+				leftDiv.style.height = "100%";
+				rightDiv.style.height = "100%";
+			}
+			else
+			{
+				noTouch = true;
+				// 长屏幕    
+			}
+
+			map = new AMap.Map('container',
+			{
+				center : new AMap.LngLat(113.268192, 23.158279),
+				zoom : 19,
+				defaultCursor : "Crosshair",
+				mapStyle : 'amap://styles/light', //设置地图的显示样式
+				features : ['bg', 'point', 'road'],
+				touchZoomCenter : 1,
+			});
+			
+			// 创建 AMap.Icon 实例：
+			var icon = new AMap.Icon(
+			{
+				size: new AMap.Size(30, 30),    // 图标尺寸
+				image: "https://a.amap.com/jsapi_demos/static/demo-center/icons/poi-marker-default.png",
+				imageSize: new AMap.Size(30, 30),   // 根据所设置的大小拉伸或压缩图片
+			});
+			
+			marker = new AMap.Marker(
+			{
+				icon: icon,
+				position:map.getCenter(),	
+				offset: new AMap.Pixel(-15, -28),
+				zIndex : 100,			
+			})
+			marker.setMap(map);	
+	
+			//BackHome();
+			
+			function MoveMark() 
+			{
+				marker.setPosition(map.getCenter());
+			}
+			map.on('mapmove', MoveMark);
+			
+			if (!noTouch)
+				map.on('click', function(e)
+				{
+					AddAPoint(e);
+				});
+
+			var Lines = [];
+			var Line = {};
+			var NowOverlays = {};
+			var EditIndex = 0;
+			LoadDat();
+			
+			function AddAPoint(e)
+			{
+				Line.name = document.getElementById("RouteNumber").value;
+				Line.color = document.getElementById("color").value;
+				var point = e.lnglat;
+				AddAPoint2(point);		
+				map.panTo(point);
+			}
+				
+			function AddAPoint2(point, minDis = 10)
+			{	
+				var lastP = point;
+				var lastSt = Line.stations[EditIndex - 1];
+				if (lastSt)
+				{
+					lastP = lastSt.point;
+				}
+
+				var routeSearcher = GetDriveSearcher();
+				routeSearcher.search(lastP, point, function(status, result){
+					//console.log(status, result);
+					if (status === 'complete')
+					{
+						var path = [lastP];
+						var dis = 0;
+						var time = 0;
+						if (Line.stations.length == 0)
+							path = [point];
+						else
+						{
+							var r = result.routes[0].steps;
+
+							for (var i = 0; i < r.length; i++)
+							{
+								var points = r[i].path;
+								for (var j = 0; j < points.length; j++)
+								{
+									path[path.length] = points[j];
+								}
+							}
+							
+							dis = result.routes[0].distance;
+							time = result.routes[0].time;
+						}
+						
+						point = ArrayLast(path);
+					
+						GetAddress(point, function(data){
+							FitPath(path, 0, path.length - 1, 10);
+							var st =
+							{
+								name : data.test2,
+								point : point,
+								path : path,
+								dis : dis,
+								time : time,
+							};
+							if (Line.stations.length == 0 || Line.stations.length == EditIndex)
+							{
+								Line.stations[Line.stations.length] = st;
+							}
+							else
+							{
+								Line.stations.splice(EditIndex, 0, st);
+							}
+							
+							EditIndex++;
+							
+							if (EditIndex < Line.stations.length)
+							{
+								//console.log(EditIndex, Line.stations[EditIndex]);
+								FixPath();
+							}
+							else
+								RedrawMap(true);
+						});
+					}
+				});
+			}
+			
+			function GetDriveSearcher()
+			{
+				if (Line.name.startsWith("K"))
+					return new AMap.Driving(
+					{
+						policy:AMap.DrivingPolicy.LEAST_FEE
+					}); 
+				if (Line.name.startsWith("C"))
+					return new AMap.Driving(
+					{
+						policy:AMap.DrivingPolicy.LEAST_DISTANCE
+					}); 
+				if (Line.name.startsWith("G"))
+					return new AMap.Driving(
+					{
+						policy:AMap.DrivingPolicy.LEAST_TIME
+					}); 
+				
+				return new AMap.Driving(
+				{
+					policy:AMap.DrivingPolicy.LEAST_FEE
+				}); 
+			}
+			
+			function FixPath()
+			{
+				//console.log(EditIndex);
+				if (EditIndex >= Line.stations.length)
+					return;
+					
+				if (0 == Line.stations.length)
+					return;
+				if (EditIndex == 0)
+				{
+					var st =
+					{
+						name : Line.stations[EditIndex].name,
+						point : Line.stations[EditIndex].point,
+						path : [Line.stations[EditIndex].point],
+						dis : 0,
+						time : 0,
+					};
+							
+					Line.stations[EditIndex] = st;
+					RedrawMap(true);
+					return;
+				}
+				
+				var routeSearcher = GetDriveSearcher();
+				routeSearcher.search(Line.stations[EditIndex - 1].point, Line.stations[EditIndex].point, function(status, result){
+					//console.log(status, result);
+					if (status === 'complete')
+					{
+						var path = [Line.stations[EditIndex - 1].point];
+						var dis = 0;
+						var time = 0;
+						if (Line.stations.length == 0)
+							path = [Line.stations[EditIndex].point];
+						else
+						{
+							var r = result.routes[0].steps;
+
+							for (var i = 0; i < r.length; i++)
+							{
+								var points = r[i].path;
+								for (var j = 0; j < points.length; j++)
+								{
+									path[path.length] = points[j];
+								}
+							}
+							
+							dis = result.routes[0].distance;
+							time = result.routes[0].time;
+						}
+						
+						point = ArrayLast(path);
+						FitPath(path, 0, path.length - 1, 10);
+						var st =
+							{
+								name : Line.stations[EditIndex].name,
+								point : point,
+								path : path,
+								dis : dis,
+								time : time,
+								
+								//f:true,
+							};
+							
+						Line.stations[EditIndex] = st;
+						
+						RedrawMap(true);
+					}
+				});
+			}
+			
+			ICON = new AMap.Icon(
+			{
+				size: new AMap.Size(12, 12),    // 图标尺寸
+				image: "https://a.amap.com/jsapi_demos/static/images/mass2.png",
+				imageSize: new AMap.Size(12, 12),   // 根据所设置的大小拉伸或压缩图片
+			});
+			
+			function RedrawMap(onlyNow) 
+			{
+				//if (!onlyNow)
+				//	NowOverlays = [];
+					
+				
+				//else
+				//	map.remove(map.getAllOverlays());
+					
+				function draw(line, now)
+				{
+					if (!line)
+						return;
+						
+						//console.log(line, now)
+					if (NowOverlays[line.name])
+					{					
+						NowOverlays[line.name].forEach(function(v){
+							map.remove(v);
+						});					
+					}
+					NowOverlays[line.name] = [];
+					var overlayArray = NowOverlays[line.name];
+					
+					var totalDis = 0;
+					var nowDis = 0;
+				
+					for (var stid = 0; stid < line.stations.length; stid++)
+					{
+						totalDis += line.stations[stid].dis;
+						if ((EditIndex - 1 - stid) % line.stations.length == 0)
+							nowDis = line.stations[stid].dis;
+					
+						var poly = new AMap.Polyline({
+							path : line.stations[stid].path,
+							strokeColor: line.color,
+							strokeWeight: now ? 3 : 1,
+							strokeOpacity: 0.8,
+						});
+						poly.setMap(map);
+						//if (now)
+						overlayArray[overlayArray.length] = poly;
+						
+						if (now)
+						{						
+
+							var text = new AMap.Marker({
+								position:line.stations[stid].point,
+
+								icon: ICON,
+								//new AMap.Icon({
+								//	image:"https://a.amap.com/jsapi_demos/static/images/mass2.png",
+								//	imageSize:new AMap.Size(12,12),
+								//	size: new AMap.Size(12,12),    // 图标尺寸
+								//}),//可见区域的大小
+								label:{content:line.stations[stid].name,offset:new AMap.Pixel(-10, -20)},
+								offset: new AMap.Pixel(-6, -6),
+								
+							});
+							text.setMap(map);
+							//if (now)
+							overlayArray[overlayArray.length] = text;
+						}
+					}
+					
+					var total1 = 0;
+					var minAbs = 9999999999;
+					var mid = null;
+					for (var stid = 0; stid < line.stations.length; stid++)
+					{
+						total1 += line.stations[stid].dis;
+						var abs = Math.abs(total1 - totalDis / 2);
+						if (abs < minAbs)
+						{
+							minAbs = abs;
+							mid = line.stations[stid];
+						}
+					}
+					
+					if (line.stations.length > 1)
+					{
+						var endPos;
+							
+						if (line.stations[0].name != ArrayLast(line.stations).name)
+						{
+							line.fromTo = line.stations[0].name + "→" + ArrayLast(line.stations).name;
+							endPos = ArrayLast(line.stations).point;
+						}
+						else
+						{
+							line.fromTo = line.stations[0].name + "↔" + mid.name;
+							endPos = mid.point;
+						}	
+						
+						//console.log(endPos)
+						
+						//if (now)
+						{
+							var text1 = new AMap.Marker({
+								position:line.stations[0].point,
+
+								icon: ICON,
+								//new AMap.Icon({
+								//	image:"https://a.amap.com/jsapi_demos/static/images/mass2.png",
+								//	imageSize:new AMap.Size(12,12),
+								//	size: new AMap.Size(12,12),    // 图标尺寸
+								//}),//可见区域的大小
+								label:{content:line.name,offset:new AMap.Pixel(-10, 10)},
+								offset: new AMap.Pixel(-6, -6),								
+							});
+							text1.setMap(map);
+							//if (now)
+							overlayArray[overlayArray.length] = text1;
+
+							var text2 = new AMap.Marker({
+								position:endPos,
+
+								icon: ICON,
+								//new AMap.Icon({
+								//	image:"https://a.amap.com/jsapi_demos/static/images/mass2.png",
+								//	imageSize:new AMap.Size(12,12),
+								//	size: new AMap.Size(12,12),    // 图标尺寸
+								//}),//可见区域的大小
+								label:{content:line.name,offset:new AMap.Pixel(-10, 10)},
+								offset: new AMap.Pixel(-6, -6),								
+							});
+							text2.setMap(map);
+							//if (now)
+							overlayArray[overlayArray.length] = text2;
+						}
+					}
+					
+					document.getElementById("length").text = totalDis + " +" + nowDis;
+					document.getElementById("fromTo").text = line.name + " " + line.fromTo;
+				}
+				
+				document.getElementById("nowSt").text = EditIndex + "." + (EditIndex > 0 ? Line.stations[EditIndex - 1].name : "");
+				
+				draw(Line, onlyNow);
+				/*if (!onlyNow)
+				{
+					var lines = Object.values(Lines);
+					lines.forEach(function(v){
+						draw(v, false);
+					});
+				}*/
+				
+
+			}
+			
+			function PolyClickPoint(point)
+			{
+				var mindis = 1e100;
+				var minpoint = null;
+				var minSpId = 0;
+				var minPId = 0;
+				for (var pathid = 0; pathid < paths.length; pathid++)
+				{
+					var path = paths[pathid];
+					for (var subpathid = 0; subpathid < path.subpaths.length; subpathid++)
+					{
+						var points = path.subpaths[subpathid].points;
+						for (var pointid = 0; pointid < points.length; pointid++) 
+						{
+							var length = GetDis(point, points[pointid]);
+							if (length < mindis) 
+							{
+								mindis = length;
+								minpoint = pointid;
+								minSpId = subpathid;
+								minPId = pathid;
+							}
+						}
+					}
+				}
+				
+				if (paths.length > 1)
+				{
+					alert(toYYYYMMDD(paths[minPId].time));
+					return;
+				}
+				NowSubpath = minSpId;
+				NowPoint = minpoint;
+				BackupString = null;
+				
+				var path = paths[minPId];
+				var subpaths = path.subpaths;
+				var subpath = subpaths[NowSubpath];
+				document.getElementById("type").value = subpath.type;
+				document.getElementById("RouteNumber").value = subpath.text;
+				RedrawMap(true);
+			}
+
+			function DeleteOne()
+			{
+				if (EditIndex == 0)
+					return;
+			
+				Line.stations.splice(EditIndex - 1, 1);
+				EditIndex--;
+				if (EditIndex < 0)
+					EditIndex = 0;
+				FixPath();
+			}
+
+			function SelectMarker()
+			{
+				PolyClickPoint(marker.getPosition());
+			}
+
+			function ClickMarker()
+			{
+				var e = { lnglat: map.getCenter() };
+				AddAPoint(e);
+			}
+
+			function SaveDat()
+			{
+				ClearEmpty();
+				var s = ToJson();
+				document.getElementById("text").value = s;
+				document.getElementById("text").setAttribute("value", s);
+			}
+
+			function LoadDat()
+			{
+				LoadDat1(document.getElementById("text").value);
+			}
+
+			function LoadDat1(s, noRezoom, nofilt)
+			{
+				//alert(s.length)
+				//var p;
+				if (s && s.length > 30)
+				{
+					p = JSON.parse(s);
+				}
+				else
+					p = { name: "", stations : [], color : "#000000" };
+					
+				function doOne(p)
+				{
+					//alert(p)
+					//console.log(Line)
+					for (var index = Lines.length - 1; index >= 0; index--)
+					{
+						if (Lines[index].name == p.name)
+							Lines.splice(index, 1);
+					}
+					Lines[Lines.length] = p;
+					
+					Line = p;
+					//alert(EditIndex)
+						
+					SetLineInfo();
+					RedrawMap(false);
+				}
+				
+				if (p.length)
+					p.forEach(function(v){
+						if (v.length)
+							v.forEach(function(v){ doOne(v); });
+						else
+							doOne(v);
+					});
+				else
+					doOne(p);
+				marker.setMap(null);	
+				map.setFitView(map.getAllOverlays());
+				marker.setMap(map);	
+				//alert(Line)
+			}
+			
+			function ArrayLast(data) {
+				return data[data.length - 1];
+			}
+
+			function AutoName(all)
+			{
+				Name2(all);
+			}			
+			
+			var _saveToFile;
+
+			function Name2(all)
+			{
+				var fileName = "";
+				if (all)
+				{
+					Lines.forEach(function(v){
+						fileName += v.name + " ";
+					});
+					fileName += ".ls";
+				}
+				else
+					fileName = Line.name + " " + Line.fromTo + ".le";
+				document.getElementById("text").value = fileName;
+				//document.getElementById("text").setAttribute("value", fileName);
+				ClearEmpty();
+				
+				if (_saveToFile)
+				{    
+					DownFile(fileName, all);
+					
+					_saveToFile = false;
+				}
+			}
+
+			LEVEL_TEXT = ["city", "district", "township"];//"country", "province", 
+			DIR = ["东", "南", "西", "北"];
+			DIRV = [[1, 0], [0, -1], [-1, 0], [0, 1]];
+			function GetAddress(point, cb)
+			{
+				//console.log(point, Psii)
+				//AMap.convertFrom([point.lng, point.lat], 'baidu', function (status, result)
+				var geo = new AMap.Geocoder(
+				{
+					extensions:"all",
+					radius:400,
+				});
+				
+				geo.getAddress(point, function(status, result)
+				{
+					//console.log(status, result)
+					if (status === 'complete' && result.info === 'OK')
+					{
+						var info = result.regeocode.addressComponent;
+						
+						//console.log(result)
+						
+						var rid = 0;
+						while (rid < result.regeocode.roads.length)
+						{
+							var road = result.regeocode.roads[rid].name;
+							if (road.indexOf("辅路") >= 0 || road.indexOf("高架") >= 0 || road.indexOf("隧道") >= 0 || road.indexOf("高速") >= 0)
+								result.regeocode.roads.splice(rid, 1);
+							else
+								rid++;
+						}
+												
+						if (result.regeocode.roads.length > 0)
+						{
+							info.test1 = result.regeocode.roads[0].name;
+							info.street = result.regeocode.roads[0].name;
+						}
+						else
+						{
+							info.test1 = null;
+							info.street = info.township;
+						}
+						
+						if (info.district == "")
+						{
+							info.district = info.city;
+						}
+						
+						info.test2 = null;
+						if (result.regeocode.pois != null)
+						{
+						console.log(result.regeocode.pois);
+							for (var poiID = 0; poiID < result.regeocode.pois.length; poiID++)
+							{
+								if (result.regeocode.pois[poiID].name.indexOf("(") >= 0)
+									result.regeocode.pois[poiID].name = result.regeocode.pois[poiID].name.substr(0, result.regeocode.pois[poiID].name.indexOf("("));
+							
+								if (result.regeocode.pois[poiID].name.length > 10)
+									continue;
+								if (result.regeocode.pois[poiID].name.indexOf("幼儿园") >= 0)
+									continue;
+									
+								var type = result.regeocode.pois[poiID].type;
+								if (type.indexOf("交通地名") >= 0 || type.indexOf("公园广场") >= 0 || type.indexOf("综合医院") >= 0 || type.indexOf("住宅小区") >= 0 || type.indexOf("普通地名") >= 0 || type.indexOf("自然地名") >= 0 || type.indexOf("政府机关") >= 0 || type.indexOf("机场") >= 0 || type.indexOf("火车站") >= 0 || type.indexOf("汽车站") >= 0 || type.indexOf("学校") >= 0 || type.indexOf("风景名胜") >= 0 || type.indexOf("购物中心") >= 0 || type.indexOf("综合体育馆") >= 0 || type.indexOf("产业园区") >= 0)
+								{
+									info.test2 = result.regeocode.pois[poiID].name;
+									//console.log(result.regeocode.pois[poiID]);
+									break;
+								}
+							}
+						}
+						if (info.test2 == null)
+						{
+							if (result.regeocode.roads.length > 1)
+							{
+								info.test2 = info.test1 + result.regeocode.roads[1].name + "口";
+							}
+							//console.log(result.regeocode.pois);
+						}
+						
+						info.lng = point.lng;
+						info.lat = point.lat;
+						cb(info);
+					}
+				});
+			}
+
+			function SaveBlob(data)
+			{
+				var blob;
+				try
+				{
+					blob = new Blob([data]);
+				}
+				catch (e)
+				{
+					// TypeError old chrome and FF
+					window.BlobBuilder = window.BlobBuilder ||
+										 window.WebKitBlobBuilder ||
+										 window.MozBlobBuilder ||
+										 window.MSBlobBuilder;
+					if(e.name == 'TypeError' && window.BlobBuilder)
+					{
+						var bb = new BlobBuilder();
+						bb.append([data.buffer]);
+						blob = bb.getBlob();
+					}
+					else if(e.name == "InvalidStateError")
+					{
+						// InvalidStateError (tested on FF13 WinXP)
+						blob = new Blob([data.buffer]);
+					}
+					else
+					{
+						// We're screwed, blob constructor unsupported entirely
+					}
+				}
+				
+				return blob;
+			}
+
+			function DownFile(name, all)
+			{
+				// 创建a标签
+				var elementA = document.createElement('a');
+
+				//文件的名称为时间戳加文件名后缀
+				elementA.download = name;
+				elementA.style.display = 'none';
+
+				//生成一个blob二进制数据，内容为json数据
+				var blob = SaveBlob(ToJson(all));
+
+				//生成一个指向blob的URL地址，并赋值给a标签的href属性
+				elementA.href = URL.createObjectURL(blob);
+				document.body.appendChild(elementA);
+				elementA.click();
+				document.body.removeChild(elementA);
+			}
+
+			function AutoNameAndSave(all)
+			{
+				_saveToFile = true;
+				AutoName(all);
+			}
+
+			var tempString = "";
+			var tempCount = 0;
+
+			function SelectAndOpenDAT()
+			{
+				inputObj = document.createElement('input');
+				inputObj.setAttribute('id','_ef');
+				inputObj.setAttribute('type','file');
+				inputObj.setAttribute('multiple','multiple');
+				inputObj.setAttribute("style",'visibility:hidden');
+				document.body.appendChild(inputObj);
+				inputObj.onchange = function ()
+				{
+					tempString = "[";
+					tempCount = 0;
+					var reg1 = /\.jpg/;
+					var reg2 = /\.JPG/;        
+					var reg3 = /\.JPEG/;        
+					var reg4 = /\.jpeg/;        
+					for (var i = 0; i < inputObj.files.length; i++)
+					{
+						var resultFile = inputObj.files[i];
+						if (resultFile && !reg1.test(resultFile.name) && !reg2.test(resultFile.name) && !reg3.test(resultFile.name) && !reg4.test(resultFile.name)) 
+						{
+							var reader = new FileReader();
+							tempCount++;
+					   
+							reader.readAsText(resultFile,'UTF-8');
+							reader.onload = function (e)
+							{
+								tempCount--;
+								
+								var urlData = this.result;
+								
+								tempString += urlData;
+								
+								if (tempCount == 0)
+								{                
+									tempString += "]";                
+									//document.getElementById("text").value = tempString;
+									LoadDat1(tempString);
+								}
+								else
+									tempString += ",";
+							};
+						}
+					}
+				}
+				inputObj.click();
+				document.body.removeChild(inputObj);
+			}
+
+			
+			function GetDis(point1, point2)
+			{
+				//console.log(point1, point2)
+				return AMap.GeometryUtil.distance(point1, point2);
+			}
+			
+			function ToJson(all)
+			{
+				var obj;
+				if (all)
+					obj = Lines;
+				else
+					obj = Line;
+					
+	            return JSON.stringify(obj, function(key, value)
+				{
+					if (value.lng && value.lat && value.Q && value.R)
+						return [  Number(value.lng.toFixed(6)) , Number(value.lat.toFixed(6))];
+					return value;
+				});
+			}
+			
+			function AddEditIndex(value)
+			{
+				EditIndex += value;
+				if (EditIndex > Line.stations.length)
+					EditIndex -= Line.stations.length;
+				if (EditIndex < 0)
+					EditIndex += Line.stations.length;
+					
+				RedrawMap(true);
+			}
+			
+			var LastStation = -1;
+			function TestRoad()
+			{
+				ClearEmpty();
+					
+				function getRdStationID()
+				{
+					var a1 = Math.floor(Math.random() * Lines.length);
+					var l1 = Lines[a1];
+					//console.log(a1, Lines);
+					var a2 = Math.floor(Math.random() * l1.stations.length);
+					//var s1 = l1.stations[a2];
+					return GetStationID(a1, a2);
+				}
+				
+				var id1;
+				if (LastStation >= 0)
+					id1 = LastStation;
+				else
+					id1 = getRdStationID();
+				var id2 = getRdStationID();
+				LastStation = id2;
+				
+				var ls = GetStation(id1);
+				var l = ls[0];
+				var s = ls[1];
+				//console.log(id1, id2, l, s);
+
+				var timeList = {};
+				var stationList = {};
+				
+				timeList[0] = [ { stid : id1, path : Lines[l].stations[s].name, time : 0 } ];
+				
+				function GetStation(id)
+				{
+					var s = id % 10000;
+					var l = (id - s) / 10000;
+					return [l, s];
+				}				
+				
+				function GetStationID(l, s)
+				{
+					return l * 10000 + s;
+				}
+				
+				function AddStruct(struct)
+				{
+					if (stationList[struct.stid])
+						return;
+					
+					if (!timeList[struct.time])
+						timeList[struct.time] = [];
+					var array = timeList[struct.time];
+					array[array.length] = struct;
+					
+					//console.log("AddStruct", struct);
+				}
+				
+				function findPath(time)
+				{
+					if (!timeList[time]) return;
+					
+					//console.log("findPath", time, timeList[time]);
+					
+					for (var idx = 0; idx < timeList[time].length; idx++)
+					{
+						var struct = timeList[time][idx];
+						
+						if (stationList[struct.stid])
+							continue;
+						stationList[struct.stid] = struct;
+							
+						var ls = GetStation(struct.stid);
+						var l = ls[0];
+						var s = ls[1];
+						var line = Lines[l];
+						var station = line.stations[s];
+						var busTime = 600;
+						for (var st = s + 1; st < line.stations.length; st++)
+						{
+							busTime += Math.round(line.stations[st].time) + 30;
+							var newSturct = { 
+								stid : GetStationID(l, st), 
+								path : struct.path + "-" + line.name + "-" + line.stations[st].name, 
+								time : struct.time + busTime,
+							};
+							AddStruct(newSturct);							
+						}
+
+						busTime = 600;
+						for (var st = s - 1; st >= 0; st--)
+						{
+							busTime += Math.round(line.stations[st + 1].time) + 30;
+							var newSturct = { 
+								stid : GetStationID(l, st), 
+								path : struct.path + "-" + line.name + "-" + line.stations[st].name, 
+								time : struct.time + busTime,
+							};
+							AddStruct(newSturct);							
+						}
+						
+						for (var line = 0; line < Lines.length; line++)
+						{
+							for (var st = 0; st < Lines[line].stations.length; st++)
+							{;
+								var dis = GetDis(Lines[line].stations[st].point, station.point);
+								if (Lines[line].stations[st].name == station.name && Lines[line].stations[st] != station)
+								{
+									var walkTime = Math.max(1, Math.round(dis / 1.0));
+									var s = "~" + Lines[line].stations[st].name;
+									if (Lines[line].stations[st].name == station.name)
+										s = "";
+									var newSturct = { 
+										stid : GetStationID(line, st), 
+										path : struct.path + s, 
+										time : struct.time + walkTime,
+									};
+									AddStruct(newSturct);	
+								}						
+							}
+						}
+					}
+				}
+				
+				for (var time = 0; time < 100000; time++)
+				{
+					if (stationList[id2])
+					{
+						//console.log(stationList[id2]);
+						document.getElementById("text").value = stationList[id2].path + " " + stationList[id2].time;
+						break;
+					}
+					
+					findPath(time);
+				}
+			}
+			
+			function FitPath(path, begin, end, minDis)
+			{
+				var maxDis = -1;
+				var maxIdx = -1;
+				for (var idx = end - 1; idx >= begin + 1; idx--)
+				{
+					var dis = AMap.GeometryUtil.distanceToSegment(path[idx], path[begin], path[end]);
+					if (dis > maxDis)
+					{
+						maxDis = dis;
+						maxIdx = idx;
+					}
+				}
+				//console.log(path, begin, end, maxDis, maxIdx, minDis);
+				if (maxDis < minDis)
+				{
+					var deleteCount = (end - 1) - (begin + 1) + 1;
+					if (deleteCount > 0)
+						path.splice(begin + 1, deleteCount);
+				}
+				else
+				{
+					FitPath(path, maxIdx, end, minDis);					
+					FitPath(path, begin, maxIdx, minDis);
+				}
+			}
+			
+			function ClearEmpty()
+			{
+				for (var index = Lines.length - 1; index >= 0; index--)
+				{
+					if (Lines[index].stations.length == 0)
+						Lines.splice(index, 1);
+				}
+			}
+			
+			function SwitchLine()
+			{
+				var name = prompt("Line.name");
+				for (var index = Lines.length - 1; index >= 0; index--)
+				{
+					if (Lines[index].name == name)
+					{
+						Line = Lines[index];
+						SetLineInfo();
+						RedrawMap(false);
+						
+						return;
+					}
+				}
+				
+				alert("找不到");
+			}
+			
+			function SetLineInfo()
+			{		
+				document.getElementById("RouteNumber").value = Line.name;
+				document.getElementById("color").value = Line.color;
+			
+				EditIndex = Line.stations.length;
+			}
+			
+			function CutName(name, filter)
+			{
+				if (filter == null)
+					filter = ["市", "镇", "乡", "街道", "区", "自治县", "县"];
+			
+				var lineName = name;
+				var idx = lineName.indexOf('(');
+				if (idx > 0)
+					lineName = lineName.substr(0, idx);
+				//console.log(lineName)
+				for (var id = 0; id < filter.length; id++)
+				{
+					var s = filter[id];
+					if (lineName.endsWith(s) && lineName.length - s.length > 1)
+					{
+						lineName = lineName.substr(0, lineName.length - s.length);
+					}
+				}
+				
+				return lineName;
+			}
+			
+			function Search(str)
+			{
+				var search = new AMap.PlaceSearch(
+				{
+					pageSize:3,
+				});
+				search.search(str, function(status, result)
+				{
+					//console.log(status, result);
+					if (result != null && result.cityList)
+					{
+						var city = result.cityList[0].name;
+						Search(city + str);
+						return;
+					}
+					if (result != null && result.poiList != null && result.poiList.pois != null)
+					{
+						for (var i = 0; i < result.poiList.pois.length; i++)
+						{
+							var poi = result.poiList.pois[i];
+							if (window.confirm(poi.name + "\n" + poi.address))
+							{
+								map.setZoom(16);
+								map.panTo(poi.location);
+								return;
+							}
+						}
+					}
+				});
+			}
+ 		</script>
+    </body>
+</html>

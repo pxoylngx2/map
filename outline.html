@@ -1,0 +1,153 @@
+<p>
+    <input type="file" id="file" />
+    色差要求：<input type=text id=DiffLimit style="width:35px;" value=8></input>
+    R：<input type=text id=Rate0 style="width:35px;" value=0></input>
+    G：<input type=text id=Rate1 style="width:35px;" value=0></input>
+    B：<input type=text id=Rate2 style="width:35px;" value=0></input>
+    <input type=button value=开始 onclick="a()" />
+</p>  
+<img id="img"></img>
+
+<script>
+    file = document.getElementById('file');
+    image = document.getElementById('img');
+    function a()
+    {
+        var fileData = file.files[0];//获取到一个FileList对象中的第一个文件( File 对象),是我们上传的文件
+        var pettern = /^image/;
+        //console.info(fileData.type)
+ 
+        if (!pettern.test(fileData.type)) 
+        {
+            alert("图片格式不正确");
+            return;
+        }
+        var reader = new FileReader();
+        /*当读取操作成功完成时调用*/
+        reader.onload = function(e)
+        {
+            ////console.log(e); //查看对象
+            ////console.log(this.result);//要的数据 这里的this指向FileReader（）对象的实例reader
+            image.setAttribute("src", this.result)
+            
+            setTimeout(()=>
+            {            
+                cvs = document.createElement('canvas');
+                cvs.width = 1000;
+                cvs.height = cvs.width * image.height / image.width;
+                //console.log(cvs);
+
+                let ctx = cvs.getContext('2d');
+                ctx.drawImage(image, 0, 0, cvs.width, cvs.height);
+                imgData = ctx.getImageData(0, 0, cvs.width, cvs.height);
+
+                newData = new Uint8ClampedArray(imgData.data.length);
+                var limit = Number(document.getElementById('DiffLimit').value);
+                console.log(cvs);
+                for (var i = 0; i<imgData.data.length; i+=4)
+                {
+                    var pos = i / 4;
+                    var x = pos % cvs.width;
+                    var y = (pos - x) / cvs.width;
+                    var max = 0;
+                    
+                    var tt = 0;
+                    for (var color = 0; color < 3; color++)
+                        tt += imgData.data[i + color];
+                        
+                    if (x > 0)
+                    {
+                        for (var color = 0; color < 3; color++)
+                        {
+                            var diff = imgData.data[i + color] - imgData.data[GetIndex(x - 1, y, color)];
+                            var absdiff = -(diff);
+                            if (absdiff > max)
+                                max = absdiff;
+                        }
+                    }
+                    if (y > 0)
+                    {
+                        for (var color = 0; color < 3; color++)
+                        {
+                            var diff = imgData.data[i + color] - imgData.data[GetIndex(x, y - 1, color)];
+                            var absdiff = -(diff);
+                            if (absdiff > max)
+                                max = absdiff;
+                        }
+                    }
+                    if (x < cvs.width - 1)
+                    {
+                        for (var color = 0; color < 3; color++)
+                        {
+                            var diff = imgData.data[i + color] - imgData.data[GetIndex(x + 1, y, color)];
+                            var absdiff =-(diff);
+                            if (absdiff > max)
+                                max = absdiff;
+                        }
+                    }
+                    if (y < cvs.height - 1)
+                    {
+                        for (var color = 0; color < 3; color++)
+                        {
+                            var diff = imgData.data[i + color] - imgData.data[GetIndex(x, y + 1, color)];
+                            var absdiff = -(diff);
+                            if (absdiff > max)
+                                max = absdiff;
+                        }
+                    }
+                    
+                    var ll = limit*(tt -100)/300;
+                    if (ll < 1) ll=1;
+                    if (max > ll)
+                    { 
+                        var v = (max - ll) / (ll * 2) * 255 + 100;
+						if (v > 255)
+                            v = 255;
+						var rate0 = Number(document.getElementById('Rate0').value);
+						var rate1 = Number(document.getElementById('Rate1').value);
+						var rate2 = Number(document.getElementById('Rate2').value);
+						var v0 = v - rate0;
+						var v1 = v - rate1;
+						var v2 = v - rate2;
+                        if (v0 < 0)
+                            v0 = 0;
+                        if (v1 < 0)
+                            v1 = 0;
+                        if (v2 < 0)
+                            v2 = 0;
+                        if (v0 > 255)
+                            v0 = 255;
+                        if (v1 > 255)
+                            v1 = 255;
+                        if (v2 > 255)
+                            v2 = 255;
+                            
+                        newData[i] = 255 - v0;
+                        newData[i + 1] = 255 - v1;
+                        newData[i + 2] = 255 - v2;
+                        newData[i + 3] = 255;
+                    }
+                    else
+                    {
+                        newData[i] = 255;
+                        newData[i + 1] = 255;
+                        newData[i + 2] = 255;
+                        newData[i + 3] = 255;
+                    }
+                }
+                
+                for (var i = 0; i < imgData.data.length; i++)
+                    imgData.data[i] = newData[i];
+                ctx.putImageData(imgData, 0, 0);
+                
+                image.src = cvs.toDataURL("image/jpg");
+            }, 500);
+        }  
+        reader.readAsDataURL(fileData);//异步读取文件内容，结果用data:url的字符串形式表示
+    }
+
+    function GetIndex(x, y, color)
+    {
+        return (x + y * cvs.width) * 4 + color;
+    }
+</script>

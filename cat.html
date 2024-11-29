@@ -1,0 +1,73 @@
+﻿<html>
+	<head>
+		<title>0</title>
+	</head>
+		<body>
+		<div id=container style="height:80%;width:100%;float:left;"></div>
+		<div id=right style="height:20%;width:100%;float:left;">
+			<input type=button value=GO style="font-size:500%" onclick="Start()"/>
+			<!--textarea id=text style="height:30%;width:100%;"></textarea-->
+		</div>
+		
+		<script src="js/cat.js"></script>
+		<script src="js/Vector2.js"></script>
+		<script src="js/physic.js"></script>
+		<script type="text/javascript">
+			var leftDiv = document.getElementById("container");
+			var rightDiv = document.getElementById("right");
+			if (document.body.clientWidth > document.body.clientHeight)
+			{
+				// 宽屏幕
+				leftDiv.style.width = "80%";
+				rightDiv.style.width = "20%";
+				leftDiv.style.height = "100%";
+				rightDiv.style.height = "100%";
+			}
+			else
+			{
+			}
+			
+			Cats = [];
+			_run = false;
+			Fish = null;
+			NowCatID = 0;
+			function Start()
+			{
+				if (_run)
+				{
+					_run = false;
+				}
+				else
+				{
+					_run = true;
+					
+					if (!Fish)
+					{
+						Fish = CreateFish();
+						Cats[Cats.length] = CreateCat(0);
+						Cats[Cats.length] = CreateCat(1);
+						Cats[Cats.length] = CreateCat(2);
+					}
+	
+					var time = new Date().getTime();
+					for (var i = 0; i < Cats.length; i++)
+						Cats[i].LastUpdate = time;
+					NowCatID = 0;
+						
+					setTimeout(Update, 1);
+				}
+			}
+			
+			function Update()
+			{
+				UpdateCat(Cats[NowCatID]);
+				NowCatID++;
+				if (NowCatID >= Cats.length)
+					NowCatID = 0;
+				
+				if (_run)
+					setTimeout(Update, 1);
+			}
+		</script>
+	</body>
+</html>
