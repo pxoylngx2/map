@@ -471,7 +471,7 @@
 								var p1 = { s : subpathid, p : 0 };
 								var p2 = { s : subpathid, p : subpath.points.length - 1 };
 								var l = GetWayDis(p1, p2, pathid);
-								if (l < 10)
+								if (l < 50)
 								{
 									//alert(l);
 									paths = [path];
@@ -1382,9 +1382,9 @@
 						var p1 = { s : idx, p : 0 };
 						var p2 = { s : idx, p : paths[0].subpaths[idx].points.length - 1 };
 						var l = GetWayDis(p1, p2);
-						//console.log(l);
-						if (l < 10)
+						if (l < 50)
 						{
+							console.log(l);
 							paths[0].subpaths.splice(idx, 1);
 							idx--;
 						}
