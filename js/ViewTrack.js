@@ -2,8 +2,8 @@ var StartDate;
 var MovingOnMap = false;
 var NowPoly;
 var NowPolyText2;
-var MOVE_SPEED = {0:5, 1:20, 2:30, 3:200, 4:1000, 5:70, 6:120};  // km / h
-var STANDARD_MAP_WIDTH = 956.2;
+const MOVE_SPEED = {"walk":5, "ride":20, "bus":30, "metro":50, "ship":20, "car":120, "train":200, "plane":1000};
+const STANDARD_MAP_WIDTH = 956.2;
 
 MoveMarker = new AMap.Marker(
 {
@@ -77,26 +77,29 @@ function MoveOnMap()
 					var lgrate = Math.log2(rate);
 					if (paths.length == 1)
 					{
-						map.setZoom(ZOOM_VIEW[paths[NowPath].subpaths[NowSubpath].type] + lgrate);
+						map.setZoom(ZOOM_VIEW[paths[NowPath].subpaths[NowSubpath].category] + lgrate);
 					}
 					else
 					{
 						map.setZoom(11 + lgrate);
 					}
+					map.panTo(paths[NowPath].subpaths[NowSubpath].points[0]);
 					
 					var icon1 = new AMap.Icon(
 					{
 						size: new AMap.Size(30, 30),    // 图标尺寸
-						image: "icon/cat" + paths[NowPath].subpaths[NowSubpath].type + ".png",
+						image: "icon/" + paths[NowPath].subpaths[NowSubpath].category + ".png",
 						imageSize: new AMap.Size(30, 30),   // 根据所设置的大小拉伸或压缩图片
 					});
 					MoveMarker.setIcon(icon1);
+					
+					StartDate = StartDate + 2000;
 				}
 				else
 				{			
 					var d = GetDis(paths[NowPath].subpaths[NowSubpath].points[NowPoint], paths[NowPath].subpaths[NowSubpath].points[NowPoint - 1]);
 					// 8小时→4分钟（1条轨迹时）
-					var dt = d / (MOVE_SPEED[paths[NowPath].subpaths[NowSubpath].type] * 1000 / 3600000) / 120;
+					var dt = d / (MOVE_SPEED[paths[NowPath].subpaths[NowSubpath].category] * 1000 / 3600000) / 120;
 					
 					var lgrate = Math.log2(paths.length + 1) / paths.length;
 					dt *= lgrate;
