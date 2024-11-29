@@ -293,7 +293,7 @@
 					};
 				var path = paths[0];
 				var subpaths = path.subpaths;
-				if (category != "walk" && (subpaths.length == 0 || (subpaths.length > 0 && ArrayLast(subpaths).category == "walk")))
+				if (category != "walk" && (subpaths.length == 0 || (subpaths.length > 0 && ArrayLast(subpaths).category != "walk")))
 					CreateSubpath("walk");
 				subpaths.splice(NowSubpath + 1, 0, {
 					category: category,
