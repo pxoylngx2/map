@@ -171,7 +171,7 @@
 				return true;
 			}
 			
-			const LINE_COLOR = {"walk":"#ff3333", "ride":"#993399", "bus":"#339999", "metro":"#777777", "ship":"3333ff", "car":"#447711", "train":"#774411", "plane":"#444444"};
+			const LINE_COLOR = {"walk":"#ff3333", "ride":"#993399", "bus":"#339999", "metro":"#777777", "ship":"#3333ff", "car":"#447711", "train":"#774411", "plane":"#444444"};
 			const LINE_WIDTH = {"walk":4, "ride":4, "bus":3, "metro":3, "ship":3, "car":2, "train":2, "plane":2};
 			const LINE_Z = {"walk":9, "ride":8, "bus":7, "metro":3, "ship":6, "car":4, "train":5, "plane":2};
 			function GetPoly(subpath, showLabel)
@@ -1384,7 +1384,7 @@
 						var l = GetWayDis(p1, p2);
 						if (l < 50)
 						{
-							console.log(l);
+							//console.log(l);
 							paths[0].subpaths.splice(idx, 1);
 							idx--;
 						}
