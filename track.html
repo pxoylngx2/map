@@ -12,8 +12,8 @@
 		<script src="https://cdn.staticfile.org/downloadjs/1.4.8/download.min.js"></script>
 	</head>
 		<body>
-		<div id=container style="height:65%;width:100%;float:left;"></div>
-		<div id=right style="height:25%;width:100%;float:left;">
+		<div id=container style="float:left;"></div>
+		<div id=right style="float:left;">
 			<br>
 			<p>
 				<select id=CategorysList></select>
@@ -22,7 +22,7 @@
 				<input type=button value=删点 onclick="DeleteOne()" />
 				<input type=button value=清空 onclick="CleanMap()" />
 				<input type=button value=标记 onclick="ClickMarker()" />
-				<input type=button value=选择 onclick="PolyClickPoint(marker.getPosition())" />
+				<input type=button value=选择 onclick="PolyClickPoint(CenterMarker.getPosition())" />
 				<input type=button value=回家 onclick="BackHome()" />
 				<input type=button value=保存 onclick="AutoNameAndSave()" />
 				<input type=button value=读取 onclick="SelectAndOpenDAT()" />
@@ -47,6 +47,7 @@
 				<input type=button value=沿途 style="font-size:50%" onclick="GetDistrict()" />
 				<!--input type=button value=转换 style="font-size:50%" onclick="TransGPS()" /-->
 				<input type=button value=修正 style="font-size:50%" onclick="FixBus()" />
+				<input type=button value=全图 style="font-size:50%" onclick="ToggleFullScreen()" />
 				<textarea id=text style="height:30%;width:100%;"></textarea>
 			</p>
 		</div>
@@ -63,30 +64,10 @@
 				option.text = CATEGORY_CN[CATEGORYS[i]];
 				optionList[i] = option;
 			}
-		
-			var leftDiv = document.getElementById("container");
-			var rightDiv = document.getElementById("right");
-			var noTouch = false;
-			if (document.body.clientWidth > document.body.clientHeight)
-			{
-				// 宽屏幕
-				leftDiv.style.width = "70%";
-				rightDiv.style.width = "30%";
-				leftDiv.style.height = "100%";
-				rightDiv.style.height = "100%";
-				
-				MapWidth = document.body.clientWidth * 0.7;
-			}
-			else
-			{
-				// 长屏幕
-				noTouch = true;
-				
-				MapWidth = document.body.clientWidth;
-			}
+			
 			var layer1 = new AMap.TileLayer();
 			LayerSatellite = new AMap.TileLayer.Satellite();
-			map = new AMap.Map('container',
+			Map = new AMap.Map('container',
 			{
 				center : new AMap.LngLat(113.268192, 23.158279),
 				zoom : 19,
@@ -105,31 +86,59 @@
 				image: "https://a.amap.com/jsapi_demos/static/demo-center/icons/poi-marker-default.png",
 				imageSize: new AMap.Size(30, 30),   // 根据所设置的大小拉伸或压缩图片
 			});
-			marker = new AMap.Marker(
+			CenterMarker = new AMap.Marker(
 			{
 				icon: icon,
-				position:map.getCenter(),
+				position:Map.getCenter(),
 				offset: new AMap.Pixel(-15, -28)
 			})
-			marker.setMap(map);
-			ICON = new AMap.Icon(
-			{
-				size: new AMap.Size(12, 12),    // 图标尺寸
-				image: "https://a.amap.com/jsapi_demos/static/images/mass2.png",
-				imageSize: new AMap.Size(12, 12),   // 根据所设置的大小拉伸或压缩图片
-			});
-			//BackHome();
+			
 			function MoveMark()
 			{
 				//if (!MovingOnMap)
-				marker.setPosition(map.getCenter());
+				CenterMarker.setPosition(Map.getCenter());
 			}
-			map.on('mapmove', MoveMark);
-			if (!noTouch)
-				map.on('click', function(e)
-				{
+			Map.on('mapmove', MoveMark);
+			var noTouch = false;
+			Map.on('click', function(e)
+			{
+				if (!noTouch)
 					AddAPoint(e);
-				});
+			});			
+			function SetStandardStyle()
+			{
+				var leftDiv = document.getElementById("container");
+				var rightDiv = document.getElementById("right");
+				if (document.body.clientWidth > document.body.clientHeight)
+				{
+					// 宽屏幕
+					noTouch = false;
+
+					leftDiv.style.width = "70%";
+					rightDiv.style.width = "30%";
+					leftDiv.style.height = "100%";
+					rightDiv.style.height = "100%";
+					
+					MapWidth = document.body.clientWidth * 0.7;
+				}
+				else
+				{
+					// 长屏幕
+					noTouch = true;
+					
+					leftDiv.style.height = "60%";
+					rightDiv.style.height = "40%";
+					leftDiv.style.width = "100%";
+					rightDiv.style.width = "100%";
+					
+					MapWidth = document.body.clientWidth * 1;
+				}
+				
+				CenterMarker.setMap(Map);
+			}
+			SetStandardStyle();
+				
+				
 			const ZOOM_VIEW = {"walk":17, "ride":15, "bus":14, "metro":13, "ship":14, "car":13, "train":11, "plane":9};
 			
 			function AddAPoint(e, getRoad = true)
@@ -137,8 +146,8 @@
 				var point = e.lnglat;
 				AddAPoint2(point);
 				RedrawMap();
-				map.setZoom(ZOOM_VIEW[subpath.category]);
-				map.panTo(point);
+				Map.setZoom(ZOOM_VIEW[subpath.category]);
+				Map.panTo(point);
 				BackupString = null;
 				
 				if (getRoad)
@@ -174,6 +183,12 @@
 			const LINE_COLOR = {"walk":"#ff3333", "ride":"#993399", "bus":"#339999", "metro":"#777777", "ship":"#3333ff", "car":"#447711", "train":"#774411", "plane":"#444444"};
 			const LINE_WIDTH = {"walk":4, "ride":4, "bus":3, "metro":3, "ship":3, "car":2, "train":2, "plane":2};
 			const LINE_Z = {"walk":9, "ride":8, "bus":7, "metro":3, "ship":6, "car":4, "train":5, "plane":2};
+			var ICON = new AMap.Icon(
+			{
+				size: new AMap.Size(12, 12),    // 图标尺寸
+				image: "https://a.amap.com/jsapi_demos/static/images/mass2.png",
+				imageSize: new AMap.Size(12, 12),   // 根据所设置的大小拉伸或压缩图片
+			});
 			function GetPoly(subpath, showLabel)
 			{
 				var color = LINE_COLOR[subpath.category];
@@ -187,7 +202,7 @@
 					strokeOpacity: 0.8,
 					zIndex : zIndex,
 				});
-				poly.setMap(map);
+				poly.setMap(Map);
 				
 				var text1, text2;
 				if (showLabel && subpath.number && subpath.from && subpath.to)
@@ -198,14 +213,14 @@
 						label : { content : subpath.number + ":" + subpath.from, offset : new AMap.Pixel(-10, -20) },
 						offset : new AMap.Pixel(-6, -6),
 					});
-					text1.setMap(map);
+					text1.setMap(Map);
 					text2 = new AMap.Marker({
 						position : ArrayLast(subpath.points),
 						icon : ICON,
 						label : { content : subpath.to, offset : new AMap.Pixel(-10, -20) },
 						offset : new AMap.Pixel(-6, -6),
 					});
-					text2.setMap(map);
+					text2.setMap(Map);
 				}
 				
 				poly.Text2 = text2;
@@ -214,7 +229,7 @@
 			
 			function RedrawMap(Rezoom)
 			{
-				map.remove(map.getAllOverlays());
+				Map.remove(Map.getAllOverlays());
 				for (var pathid = 0; pathid < paths.length; pathid++)
 				{
 					path = paths[pathid];
@@ -227,10 +242,10 @@
 				
 				if (Rezoom)
 				{
-					map.setFitView(map.getAllOverlays());
+					Map.setFitView(Map.getAllOverlays());
 				}
 				//if (paths.length <= 1)
-				marker.setMap(map);
+				CenterMarker.setMap(Map);
 				//ShowChart();
 			}
 			
@@ -317,10 +332,10 @@
 				{
 					NowSubpath = 0;
 					subpath = subpaths[NowSubpath];
-					subpath.points[0] = marker.getPosition();
+					subpath.points[0] = CenterMarker.getPosition();
 				}
 				NowPoint = 0;
-				map.setZoom(ZOOM_VIEW[subpath.category]);
+				Map.setZoom(ZOOM_VIEW[subpath.category]);
 			}
 			
 			function DeleteOne()
@@ -361,7 +376,7 @@
 			{
 				var e =
 				{
-					lnglat: map.getCenter()
+					lnglat: Map.getCenter()
 				};
 				AddAPoint(e, getRoad);
 			}
@@ -499,7 +514,7 @@
 			
 			function AutoNamePic()
 			{
-				GetAddress(map.getCenter(), GeoCoderCallBack);
+				GetAddress(Map.getCenter(), GeoCoderCallBack);
 			}
 			
 			function toYYYYMMDD(time)
@@ -1150,8 +1165,8 @@
 					});
 					geolocation.getCurrentPosition(function(status, result)
 					{
-						marker.setPosition(result.position);
-						map.panTo(result.position);
+						CenterMarker.setPosition(result.position);
+						Map.panTo(result.position);
 						//console.log(status, result);
 					});
 					return;
@@ -1160,8 +1175,8 @@
 				var point = home;
 				AddAPoint2(point);
 				RedrawMap();
-				map.setZoom(ZOOM_VIEW[subpath.category]);
-				map.panTo(point);
+				Map.setZoom(ZOOM_VIEW[subpath.category]);
+				Map.panTo(point);
 				BackupString = null;
 				
 				GetRoad(true);				
@@ -1170,11 +1185,11 @@
 			function DrawBus()
 			{
 				document.getElementById("text").value = "";
-				map.remove(map.getAllOverlays());
+				Map.remove(Map.getAllOverlays());
 				//if (paths.length <= 1)
-				marker.setMap(map);
+				CenterMarker.setMap(Map);
 				var blss = {};
-				var center = marker.getPosition();
+				var center = CenterMarker.getPosition();
 				var search = new AMap.PlaceSearch(
 				{
 					pageSize:50,
@@ -1248,14 +1263,14 @@
 												strokeOpacity: 0.8,
 												zIndex:60 - p2,
 											});
-											poly.setMap(map);
+											poly.setMap(Map);
 											var text = new AMap.Text(
 											{
 												text:name,
 												position:info.path[0],
 												zIndex:60 - p2,
 											});
-											text.setMap(map);
+											text.setMap(Map);
 											//console.log(info, info.name, name);//, info.basic_price, info.total_price);
 										});
 									}
@@ -1301,8 +1316,8 @@
 							var poi = result.poiList.pois[i];
 							if (window.confirm(poi.name + "\n" + poi.address))
 							{
-								map.setZoom(16);
-								map.panTo(poi.location);
+								Map.setZoom(16);
+								Map.panTo(poi.location);
 								return;
 							}
 						}
@@ -1456,7 +1471,7 @@
 							text:data.township,
 							position:point,
 						});
-						text.setMap(map);
+						text.setMap(Map);
 						
 						if (i < pointList.length - 1)
 						{
@@ -1610,6 +1625,24 @@
 						//break;
 					}
 				}
+			}
+			
+			FullScreenScript = null;
+			function ToggleFullScreen()
+			{
+				if (!FullScreenScript)
+				{
+					FullScreenScript = document.createElement('script');
+					
+					// 设置 script 元素的属性
+					FullScreenScript.src = 'js/FullScreen.js';
+					FullScreenScript.onload = function(){ToggleFullScreen1();};
+
+					// 将 script 元素添加到 head 或 body 部分
+					document.getElementsByTagName('head')[0].appendChild(FullScreenScript);
+				}
+				else
+					ToggleFullScreen1();
 			}
 		</script>
 	</body>

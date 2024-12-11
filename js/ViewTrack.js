@@ -7,7 +7,7 @@ const STANDARD_MAP_WIDTH = 956.2;
 
 MoveMarker = new AMap.Marker(
 {
-	position:map.getCenter(),
+	position:Map.getCenter(),
 	offset: new AMap.Pixel(-15, -15)
 })
 
@@ -16,8 +16,8 @@ function MoveOnMap()
 	if (!MovingOnMap)
 	{
 		FitAll();
-		map.remove(map.getAllOverlays());
-		MoveMarker.setMap(map);
+		Map.remove(Map.getAllOverlays());
+		MoveMarker.setMap(Map);
 		StartDate = new Date().getTime();
 		MoveOnMapID = 0;
 		MovingOnMap = true;
@@ -66,7 +66,7 @@ function MoveOnMap()
 					}
 					
 					if (NowPoly && NowPoly.Text2)
-						NowPoly.Text2.setMap(map);
+						NowPoly.Text2.setMap(Map);
 					NowPoly = GetPoly(paths[NowPath].subpaths[NowSubpath], paths.length == 1);
 					NowPoly.setPath([ paths[NowPath].subpaths[NowSubpath].points[0], paths[NowPath].subpaths[NowSubpath].points[0] ]);
 					if (NowPoly && NowPoly.Text2)
@@ -77,13 +77,13 @@ function MoveOnMap()
 					var lgrate = Math.log2(rate);
 					if (paths.length == 1)
 					{
-						map.setZoom(ZOOM_VIEW[paths[NowPath].subpaths[NowSubpath].category] + lgrate);
+						Map.setZoom(ZOOM_VIEW[paths[NowPath].subpaths[NowSubpath].category] + lgrate);
 					}
 					else
 					{
-						map.setZoom(11 + lgrate);
+						Map.setZoom(11 + lgrate);
 					}
-					map.panTo(paths[NowPath].subpaths[NowSubpath].points[0]);
+					Map.panTo(paths[NowPath].subpaths[NowSubpath].points[0]);
 					
 					var icon1 = new AMap.Icon(
 					{
@@ -130,13 +130,13 @@ function MoveOnMap()
 					}
 					
 					var pp = arr[arr.length - 1];
-					var pixel = map.lngLatToContainer(pp);
-					var size = map.getSize();
+					var pixel = Map.lngLatToContainer(pp);
+					var size = Map.getSize();
 					var rate1 = pixel.x / size.width;
 					var rate2 = pixel.y / size.height;
 					//console.log(pixel, size, rate1, rate2);
 					if (rate1 < 0.2 || rate1 > 0.8 || rate2 < 0.2 || rate2 > 0.8)
-						map.panTo(pp);
+						Map.panTo(pp);
 						
 					MoveMarker.setPosition(pp);
 					NowPoly.setPath(arr);
