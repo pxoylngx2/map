@@ -512,9 +512,22 @@
 				return data[data.length - 1];
 			}
 			
+			var picID = 0;
 			function AutoNamePic()
 			{
-				GetAddress(Map.getCenter(), GeoCoderCallBack);
+				GetAddress(Map.getCenter(), function(data){
+					AMap.convertFrom([data.lng, data.lat], 'gps', function (status, result) {
+						//console.log(data, result);
+						var lng1 = data.lng * 2 - result.locations[0].lng;
+						var lat1 = data.lat * 2 - result.locations[0].lat;
+						picID++;
+						
+						if (paths.length == 0)
+							ClickMarker();
+							
+						document.getElementById("text").value = data.city + data.district + data.township + data.street + " " + toYYYYMMDD(paths[0].time) + "(" + lng1.toFixed(6) + "," + lat1.toFixed(6) + picID + ")";					
+					});
+				});
 			}
 			
 			function toYYYYMMDD(time)
@@ -524,16 +537,6 @@
 				var mm = d.getMonth() < 9 ? "0" + (d.getMonth() + 1) : (d.getMonth() + 1).toString();
 				var yyyy = d.getFullYear().toString();
 				return yyyy + mm + dd;
-			}
-			
-			function GeoCoderCallBack(data)
-			{
-				AMap.convertFrom([data.lng, data.lat], 'gps', function (status, result) {
-					//console.log(data, result);
-					var lng1 = data.lng * 2 - result.locations[0].lng + Math.random() * 0.000001;
-					var lat1 = data.lat * 2 - result.locations[0].lat + Math.random() * 0.000001;
-					document.getElementById("text").value = data.district + data.street + toYYYYMMDD(paths[0].time) + "(" + lng1.toFixed(9) + "," + lat1.toFixed(9) + ")";					
-				});
 			}
 			
 			function GetWayDis(p1, p2, pid=0)
@@ -693,8 +696,8 @@
 				//AMap.convertFrom([point.lng, point.lat], 'baidu', function (status, result)
 				var geo = new AMap.Geocoder(
 				{
-					extensions:"all",
-					radius:400,
+					extensions:"base",
+					radius:0,
 				});
 				geo.getAddress(point, function(status, result)
 				{
@@ -705,25 +708,6 @@
 						{
 							var info = data.addressComponent;
 							//console.log(data)
-							var rid = 0;
-							while (rid < data.roads.length)
-							{
-								var road = data.roads[rid].name;
-								if (road.indexOf("辅路") >= 0 || road.indexOf("高架") >= 0 || road.indexOf("隧道") >= 0 || road.indexOf("高速") >= 0)
-									data.roads.splice(rid, 1);
-								else
-									rid++;
-							}
-							if (data.roads.length > 0)
-							{
-								//info.FixBus = result.regeocode.roads[0].name;
-								info.street = data.roads[0].name;
-							}
-							else
-							{
-								//info.FixBus = null;
-								info.street = info.township;
-							}
 							if (info.city == "")
 							{
 								info.city = info.province;
