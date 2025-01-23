@@ -11,7 +11,7 @@
                 securityJsCode:'128bd45e3f7532dffbf4134c153dbbd9',
             }
         </script>
-        <script type="text/javascript" src="https://webapi.amap.com/maps?v=1.4.15&key=cf6edf5f08c0c90141db2148d8b0280c&plugin=AMap.Geocoder,AMap.Driving,AMap.PlaceSearch"></script>
+        <script type="text/javascript" src="https://webapi.amap.com/maps?v=1.4.15&key=cf6edf5f08c0c90141db2148d8b0280c&plugin=AMap.Geocoder,AMap.Driving,AMap.Walking,AMap.PlaceSearch"></script>
         <!--script src="http://cdn.hcharts.cn/highcharts/highcharts.js"></script-->
     </head>  
        <body>
@@ -197,26 +197,10 @@
 			
 			function GetDriveSearcher()
 			{
-				if (Line.name.startsWith("K"))
-					return new AMap.Driving(
-					{
-						policy:AMap.DrivingPolicy.LEAST_FEE
-					}); 
-				if (Line.name.startsWith("C"))
-					return new AMap.Driving(
-					{
-						policy:AMap.DrivingPolicy.LEAST_DISTANCE
-					}); 
-				if (Line.name.startsWith("G"))
-					return new AMap.Driving(
-					{
-						policy:AMap.DrivingPolicy.LEAST_TIME
-					}); 
+				if (Line.name.startsWith("w"))
+					return new AMap.Walking();
 				
-				return new AMap.Driving(
-				{
-					policy:AMap.DrivingPolicy.LEAST_FEE
-				}); 
+				return new AMap.Driving(); 
 			}
 			
 			function FixPath()
@@ -615,7 +599,7 @@
 				var geo = new AMap.Geocoder(
 				{
 					extensions:"all",
-					radius:400,
+					radius:200,
 				});
 				
 				geo.getAddress(point, function(status, result)
@@ -656,23 +640,39 @@
 						info.test2 = null;
 						if (result.regeocode.pois != null)
 						{
-						console.log(result.regeocode.pois);
+							console.log(result.regeocode.pois);
 							for (var poiID = 0; poiID < result.regeocode.pois.length; poiID++)
 							{
 								if (result.regeocode.pois[poiID].name.indexOf("(") >= 0)
 									result.regeocode.pois[poiID].name = result.regeocode.pois[poiID].name.substr(0, result.regeocode.pois[poiID].name.indexOf("("));
-							
-								if (result.regeocode.pois[poiID].name.length > 10)
-									continue;
-								if (result.regeocode.pois[poiID].name.indexOf("幼儿园") >= 0)
+
+								if (result.regeocode.pois[poiID].name.length > 12)
 									continue;
 									
 								var type = result.regeocode.pois[poiID].type;
-								if (type.indexOf("交通地名") >= 0 || type.indexOf("公园广场") >= 0 || type.indexOf("综合医院") >= 0 || type.indexOf("住宅小区") >= 0 || type.indexOf("普通地名") >= 0 || type.indexOf("自然地名") >= 0 || type.indexOf("政府机关") >= 0 || type.indexOf("机场") >= 0 || type.indexOf("火车站") >= 0 || type.indexOf("汽车站") >= 0 || type.indexOf("学校") >= 0 || type.indexOf("风景名胜") >= 0 || type.indexOf("购物中心") >= 0 || type.indexOf("综合体育馆") >= 0 || type.indexOf("产业园区") >= 0)
+								if (type.indexOf("公园广场") >= 0 || type.indexOf("风景名胜") >= 0)
 								{
 									info.test2 = result.regeocode.pois[poiID].name;
 									//console.log(result.regeocode.pois[poiID]);
 									break;
+								}
+							}
+							if (info.test2 == null)
+							{
+								for (var poiID = 0; poiID < result.regeocode.pois.length; poiID++)
+								{
+									if (result.regeocode.pois[poiID].name.indexOf("幼儿园") >= 0)
+										continue;
+										
+									var type = result.regeocode.pois[poiID].type;
+									if (result.regeocode.pois[poiID].name.length > 8)
+										continue;
+									if (type.indexOf("交通设施服务") >= 0 || type.indexOf("公园广场") >= 0 || type.indexOf("综合医院") >= 0 || type.indexOf("住宅小区") >= 0 || type.indexOf("普通地名") >= 0 || type.indexOf("自然地名") >= 0 || type.indexOf("政府机关") >= 0 || type.indexOf("机场") >= 0 || type.indexOf("火车站") >= 0 || type.indexOf("汽车站") >= 0 || type.indexOf("学校") >= 0 || type.indexOf("风景名胜") >= 0 || type.indexOf("购物中心") >= 0 || type.indexOf("综合体育馆") >= 0 || type.indexOf("产业园区") >= 0)
+									{
+										info.test2 = result.regeocode.pois[poiID].name;
+										//console.log(result.regeocode.pois[poiID]);
+										break;
+									}
 								}
 							}
 						}
