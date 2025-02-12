@@ -716,6 +716,14 @@
 							{
 								info.district = info.city;
 							}
+							if (info.township == "")
+							{
+								info.township = "__";
+							}
+							if (info.street == "")
+							{
+								info.street = "__";
+							}
 							
 							return info;
 						}
