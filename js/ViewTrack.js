@@ -15,6 +15,9 @@ function MoveOnMap()
 {
 	if (!MovingOnMap)
 	{
+		if (!FullScreenScript || !FullScreenNow)
+			ToggleFullScreen();
+		
 		FitAll();
 		Map.remove(Map.getAllOverlays());
 		MoveMarker.setMap(Map);
